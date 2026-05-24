@@ -25,6 +25,7 @@ func newRootCmd() *cobra.Command {
 			return cmd.Help()
 		},
 	}
+	root.AddCommand(newProxyCmd())
 	return root
 }
 
