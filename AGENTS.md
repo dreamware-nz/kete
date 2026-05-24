@@ -142,10 +142,16 @@ redacted as belt-and-braces.
 
 Every capture / injection is keyed by *project path*. Always resolve via
 `capture.NormaliseProject` so symlinked paths collapse to one identity.
-Both `internal/proxy/project.go` (`projectPath()`) and
-`internal/capture/capture.go` honour `KETE_PROJECT` first, else cwd,
-both with `EvalSymlinks`. If you add a third caller, route it through
-`capture.NormaliseProject` — don't reimplement.
+Proxy resolution (`internal/proxy/project.go`) is per-request:
+`X-Kete-Project` header first, then `KETE_PROJECT` env, then **nothing**
+— there is no cwd fallback, because under launchd the daemon's cwd is
+`$HOME` and that bucketed every project on the machine into one (the
+v0.1.0 bug). Empty project means capture/inject/drift skip.
+
+`internal/capture/capture.go` (used by MCP and CLI, both of which run
+co-located with the project) does still honour cwd. If you add a third
+caller in the proxy package, route it through the request handler — do
+not reach for cwd.
 
 ## Request lifecycle (POST /v1/messages)
 

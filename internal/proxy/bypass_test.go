@@ -26,6 +26,8 @@ func TestBypassHeader_SkipsCaptureAndInject(t *testing.T) {
 	resolvedDir, _ := filepath.EvalSymlinks(dir)
 	t.Setenv("KETE_HOME", dir)
 	t.Setenv("KETE_PROJECT", resolvedDir)
+	t.Setenv("KETE_INJECT_MEMORY", "1")
+	t.Setenv("KETE_DRIFT_ENABLED", "1")
 
 	db, err := store.OpenDefault()
 	if err != nil {

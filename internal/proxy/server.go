@@ -248,7 +248,8 @@ func (s *Server) handleMessages(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	project := projectPath()
+	project := projectPath(r.Header)
+	r.Header.Del(ProjectHeader) // strip before forwarding; not for the upstream
 
 	// Hard size cap: a session can outgrow Bedrock's 1M token cap
 	// faster than usage-driven compaction can fire (which observes
@@ -269,6 +270,34 @@ func (s *Server) handleMessages(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// All project-keyed work — capture, memory injection, drift,
+	// compaction state — needs a project. Without one, kete is just a
+	// passthrough proxy with the hard-truncate safety net. This is
+	// the deliberate behaviour while we move project resolution from
+	// "daemon cwd" (which silently bucketed every project under $HOME
+	// under launchd) to per-request signal. Set X-Kete-Project on the
+	// inbound request, or KETE_PROJECT on the daemon, to opt in.
+	if project == "" {
+		injected := rawBody
+		sanitised := SanitiseHeaders(r.Header)
+		if streamingRequest(injected) {
+			if err := ad.Forward(r.Context(), injected, sanitised, w); err != nil {
+				fmt.Fprintf(os.Stderr, "forward(%s) no-project: %v\n", up, err)
+			}
+		} else {
+			status, respHdr, respBody, err := s.runExpandLoop(r.Context(), ad, sanitised, injected)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "expand-loop(%s) no-project: %v\n", up, err)
+				http.Error(w, err.Error(), http.StatusBadGateway)
+			} else {
+				maps.Copy(w.Header(), respHdr)
+				w.WriteHeader(status)
+				_, _ = w.Write(respBody)
+			}
+		}
+		return
+	}
+
 	// If a prior turn crossed the clear threshold, rewrite the body
 	// to drop the conversation in favour of the structured summary.
 	// This is the deliberate ADR 0006 exception: compaction *is* a
@@ -282,19 +311,30 @@ func (s *Server) handleMessages(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	injected := rawBody
+
 	// Inject prior memory before forwarding. Failure is non-fatal:
-	// brief 002 says enrichment never blocks forwarding.
-	injected, err := injectMemory(r.Context(), s.store, project, rawBody)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "inject(%s): %v\n", project, err)
-		injected = rawBody
+	// brief 002 says enrichment never blocks forwarding. Off by
+	// default while we get project resolution + extraction quality
+	// right; opt in with KETE_INJECT_MEMORY=1.
+	if envBool("KETE_INJECT_MEMORY", false) {
+		b, err := injectMemory(r.Context(), s.store, project, rawBody)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "inject(%s): %v\n", project, err)
+		} else {
+			injected = b
+		}
 	}
 
 	// If a previous turn produced a correction, splice it ahead of
-	// memory. One correction per request; consume on inject.
-	if correction := s.consumeCorrection(project); correction != "" {
-		if b, err := injectCorrectionPayload(injected, correction); err == nil {
-			injected = b
+	// memory. One correction per request; consume on inject. Off by
+	// default — drift queueing is gated separately below; this is
+	// the consume-side belt.
+	if envBool("KETE_DRIFT_ENABLED", false) {
+		if correction := s.consumeCorrection(project); correction != "" {
+			if b, err := injectCorrectionPayload(injected, correction); err == nil {
+				injected = b
+			}
 		}
 	}
 
@@ -332,8 +372,9 @@ func (s *Server) handleMessages(w http.ResponseWriter, r *http.Request) {
 	s.capture.Record(project, "proxy", rawBody)
 
 	// Drift check every Nth request; result feeds the next request's
-	// correction queue so the hot path stays cheap-ish.
-	if s.driftHook.Tick() {
+	// correction queue so the hot path stays cheap-ish. Off by
+	// default — opt in with KETE_DRIFT_ENABLED=1.
+	if envBool("KETE_DRIFT_ENABLED", false) && s.driftHook.Tick() {
 		go s.scoreAndQueueCorrection(project, rawBody)
 	}
 

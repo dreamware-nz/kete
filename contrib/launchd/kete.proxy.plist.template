@@ -61,6 +61,27 @@
            claude-haiku-4-5-20251001 -->
     <key>KETE_DRIFT_MODEL</key>
     <string>us.anthropic.claude-haiku-4-5-20251001-v1:0</string>
+
+    <!-- Project keying. As of v0.1.x kete REQUIRES a per-request
+         X-Kete-Project header OR a KETE_PROJECT env to do anything
+         project-keyed (capture, memory injection, drift). Without
+         one, the daemon is a passthrough proxy with the hard-truncate
+         safety net only — by design, so a launchd-launched daemon
+         doesn't bucket every project on the machine under $HOME (the
+         original v0.1.0 bug, see CHANGELOG). Either:
+           - set KETE_PROJECT below to scope this daemon to one project
+             (run multiple daemons on different ports for >1 project),
+             or
+           - leave KETE_PROJECT unset and have your client send
+             X-Kete-Project on every request. -->
+    <!-- <key>KETE_PROJECT</key><string>__HOME__/Documents/your/project</string> -->
+
+    <!-- Memory injection and drift correction are off by default
+         while project resolution and extraction quality stabilise.
+         Flip to "1" once you trust the captured rows for this
+         project. -->
+    <!-- <key>KETE_INJECT_MEMORY</key><string>1</string> -->
+    <!-- <key>KETE_DRIFT_ENABLED</key><string>1</string> -->
   </dict>
 
   <key>RunAtLoad</key>

@@ -3,6 +3,7 @@ package proxy
 import (
 	"os"
 	"strconv"
+	"strings"
 )
 
 // compactHook fires PreCompute and Apply events when usage crosses
@@ -62,6 +63,22 @@ func envInt(key string, def int) int {
 		if n, err := strconv.Atoi(v); err == nil {
 			return n
 		}
+	}
+	return def
+}
+
+// envBool reads a boolean env flag. "1", "true", "yes", "on" → true
+// (case-insensitive). Anything else, including unset, returns def.
+func envBool(key string, def bool) bool {
+	v := os.Getenv(key)
+	if v == "" {
+		return def
+	}
+	switch strings.ToLower(v) {
+	case "1", "true", "yes", "on":
+		return true
+	case "0", "false", "no", "off":
+		return false
 	}
 	return def
 }
