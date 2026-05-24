@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>kete.proxy</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <!-- Replace with the absolute path your installer used. -->
+    <string>__HOME__/.local/bin/kete</string>
+    <string>proxy</string>
+  </array>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>HOME</key>
+    <string>__HOME__</string>
+    <key>PATH</key>
+    <string>__HOME__/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+
+    <!-- kete's bind port. Default 8080; this template uses 8765 so
+         it doesn't collide with anything else. -->
+    <key>KETE_PORT</key>
+    <string>8765</string>
+
+    <!-- Pick exactly one of the three upstreams.
+         See docs/how-to/use-bedrock.md and use-cc-proxy.md.
+
+         For Bedrock: -->
+    <key>KETE_UPSTREAM</key>
+    <string>bedrock</string>
+    <key>AWS_REGION</key>
+    <string>us-west-2</string>
+    <!-- AWS_PROFILE is honoured by the standard SDK chain. -->
+    <!-- <key>AWS_PROFILE</key><string>default</string> -->
+
+    <!-- For cc-proxy, replace the Bedrock vars above with:
+    <key>KETE_UPSTREAM</key><string>cc-proxy</string>
+    <key>KETE_CC_PROXY_KEY</key><string>YOUR-CC-PROXY-KEY</string>
+    -->
+
+    <!-- For Anthropic-direct, replace with:
+    <key>KETE_UPSTREAM</key><string>anthropic</string>
+    <key>ANTHROPIC_API_KEY</key><string>sk-ant-...</string>
+    -->
+  </dict>
+
+  <key>RunAtLoad</key>
+  <true/>
+
+  <key>KeepAlive</key>
+  <dict>
+    <key>SuccessfulExit</key>
+    <false/>
+    <key>Crashed</key>
+    <true/>
+  </dict>
+
+  <key>ThrottleInterval</key>
+  <integer>10</integer>
+
+  <key>StandardOutPath</key>
+  <string>__HOME__/.kete/proxy.out.log</string>
+  <key>StandardErrorPath</key>
+  <string>__HOME__/.kete/proxy.err.log</string>
+
+  <key>WorkingDirectory</key>
+  <string>__HOME__</string>
+</dict>
+</plist>
