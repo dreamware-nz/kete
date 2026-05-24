@@ -74,7 +74,7 @@ func (c *capture) Record(project, source string, rawBody []byte) {
 			ID:             id,
 			ProjectPath:    project,
 			Source:         source,
-			ReasoningTrace: capturepkg.ClipTrace(body),
+			ReasoningTrace: capturepkg.ExtractConversation(body),
 		}
 		if err := c.store.CreateTask(context.Background(), t); err != nil {
 			fmt.Fprintf(os.Stderr, "capture: create %s: %v\n", id, err)
@@ -95,7 +95,7 @@ func (c *capture) enrich(taskID string, body []byte) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
-	clipped := capturepkg.ClipTrace(body)
+	clipped := capturepkg.ExtractConversation(body)
 	out, err := c.extractor.ExtractTask(ctx, clipped)
 	if err != nil {
 		// Network errors / non-JSON responses both land here. Don't
