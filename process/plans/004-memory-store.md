@@ -1,7 +1,7 @@
 ---
 id: 004-memory-store
 date: 2026-05-24
-status: draft
+status: done
 brief: 004-memory-store
 design: null
 adrs: [0002-sqlite-via-modernc-no-cgo, 0003-clean-numbered-migrations, 0004-kete-dotdir-layout-and-perms]
