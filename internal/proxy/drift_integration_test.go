@@ -30,6 +30,7 @@ func TestProxy_DriftFiresAndCorrectsNextRequest(t *testing.T) {
 	t.Setenv("KETE_PROJECT", resolvedDir)
 	t.Setenv("KETE_INJECT_MEMORY", "1")
 	t.Setenv("KETE_DRIFT_ENABLED", "1")
+	t.Setenv("KETE_CAPTURE_MIN_BYTES", "0")
 
 	db, err := store.OpenDefault()
 	if err != nil {

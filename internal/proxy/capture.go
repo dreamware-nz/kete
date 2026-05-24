@@ -44,10 +44,24 @@ func (c *capture) SetExtractor(ex *extract.Client) {
 	c.extractor = ex
 }
 
+// minCaptureBytes filters out plumbing requests that are not "what
+// the user is working on": Crush keepalive pings (~150 bytes,
+// {"messages":[{"content":"reply with PONG"}],"max_tokens":32}),
+// session-title generation, autocomplete, and similar small-model
+// utility traffic. Real coding-turn bodies carry the system prompt,
+// tools, and content blocks and easily clear several KiB even on
+// the first turn. 2 KiB cleanly separates the two populations.
+//
+// Override via KETE_CAPTURE_MIN_BYTES.
+const minCaptureBytes = 2048
+
 // Record schedules a raw write, then an enrichment pass. Safe to
 // call from a request handler. rawBody is copied.
 func (c *capture) Record(project, source string, rawBody []byte) {
 	if c.store == nil || project == "" {
+		return
+	}
+	if len(rawBody) < envInt("KETE_CAPTURE_MIN_BYTES", minCaptureBytes) {
 		return
 	}
 	body := make([]byte, len(rawBody))

@@ -23,6 +23,7 @@
 | `KETE_COMPACT_CLEAR_TOKENS`  | `180000`    | Apply fires at this usage           |
 | `KETE_HARD_TRUNCATE_BYTES`   | `1048576`   | Drop middle of `messages` at/above this body size |
 | `KETE_HARD_TRUNCATE_KEEP`    | `30`        | Number of recent messages to retain on hard-truncate |
+| `KETE_CAPTURE_MIN_BYTES`     | `2048`      | Skip capture when raw body is smaller than this (filters Crush keepalive pings, title-gen, autocomplete) |
 | `KETE_EXTENDED_CACHE`        | `false`     | Opt into the keep-alive (ADR 0013)  |
 
 ### Project keying
