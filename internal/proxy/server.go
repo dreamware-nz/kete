@@ -9,12 +9,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"os"
 	"strconv"
 	"time"
 
+	"github.com/dreamware-nz/kete/internal/adapter"
+	"github.com/dreamware-nz/kete/internal/adapter/anthropic"
 	"github.com/dreamware-nz/kete/internal/store"
 	"github.com/go-chi/chi/v5"
 )
@@ -59,9 +62,10 @@ func LoadConfig() (Config, error) {
 
 // Server holds the running HTTP server's state. One per process.
 type Server struct {
-	cfg   Config
-	store *store.DB
-	http  *http.Server
+	cfg      Config
+	store    *store.DB
+	http     *http.Server
+	adapters map[Upstream]adapter.Wire
 }
 
 // NewServer wires the chi router and an http.Server. It does not bind
@@ -71,8 +75,9 @@ func NewServer(cfg Config, db *store.DB) *Server {
 	r.Use(timeoutMiddleware(cfg.RequestTimeout))
 	r.Use(maxBodyMiddleware(cfg.MaxBodyBytes))
 
-	s := &Server{cfg: cfg, store: db}
+	s := &Server{cfg: cfg, store: db, adapters: defaultAdapters()}
 	r.Get("/health", s.handleHealth)
+	r.Post("/v1/messages", s.handleMessages)
 	r.NotFound(s.handleNotFound)
 
 	s.http = &http.Server{
@@ -147,4 +152,44 @@ func (s *Server) handleNotFound(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("content-type", "application/json")
 	w.WriteHeader(http.StatusNotFound)
 	_, _ = w.Write([]byte(`{"error":"Not found"}`))
+}
+
+// defaultAdapters wires the three upstreams. cc-proxy and Bedrock land
+// in plans 013 and 012; for now those two slots are nil and selecting
+// them returns 501 from handleMessages.
+func defaultAdapters() map[Upstream]adapter.Wire {
+	return map[Upstream]adapter.Wire{
+		UpstreamAnthropic: anthropic.New(),
+	}
+}
+
+// handleMessages routes a /v1/messages request through the upstream
+// selector and the chosen adapter. The body is read once into a
+// []byte and forwarded byte-exact (ADR 0006).
+func (s *Server) handleMessages(w http.ResponseWriter, r *http.Request) {
+	rawBody, err := io.ReadAll(r.Body)
+	if err != nil {
+		var mbe *http.MaxBytesError
+		if errors.As(err, &mbe) {
+			http.Error(w, "request body exceeds limit", http.StatusRequestEntityTooLarge)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	up, err := SelectUpstream(r.Header, rawBody)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	ad, ok := s.adapters[up]
+	if !ok || ad == nil {
+		http.Error(w, fmt.Sprintf("upstream %q not yet implemented", up),
+			http.StatusNotImplemented)
+		return
+	}
+	if err := ad.Forward(r.Context(), rawBody, SanitiseHeaders(r.Header), w); err != nil {
+		// Headers may already be flushed; surface via log only.
+		fmt.Fprintf(os.Stderr, "forward(%s): %v\n", up, err)
+	}
 }
