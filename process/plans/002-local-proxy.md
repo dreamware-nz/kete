@@ -1,7 +1,7 @@
 ---
 id: 002-local-proxy
 date: 2026-05-24
-status: active
+status: done
 brief: 002-local-proxy
 design: 002-local-proxy
 adrs: [0005-http-server-net-http-chi, 0006-raw-body-passthrough-for-prompt-cache, 0007-agent-agnostic-adapter-interface, 0009-haiku-as-extraction-model, 0011-drift-correction-four-levels, 0013-byte-exact-keepalive-injection, 0015-three-upstreams-selection]
