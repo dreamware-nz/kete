@@ -20,16 +20,22 @@ kete doctor
 
 ### `kete drift-test`
 
-Score drift on a fixture prompt
+Score drift on a prompt or fixture set
+
+Score drift on a single prompt (with --goal) or run an entire
+fixture file with --fixture <path>. Fixture mode prints a per-row
+table comparing expected vs actual level so you can eyeball
+calibration against the hand-labelled set in testdata/drift/.
 
 ```
-kete drift-test <prompt> [flags]
+kete drift-test [<prompt>] [flags]
 ```
 
 Flags:
 
 ```
-      --goal string   stated goal of the session
+      --fixture string   path to a fixture JSON file
+      --goal string      stated goal of the session
 
 ```
 
