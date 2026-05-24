@@ -1,7 +1,7 @@
 ---
 id: 008-auto-compaction
 date: 2026-05-24
-status: active
+status: done
 brief: 008-auto-compaction
 design: null
 adrs: []

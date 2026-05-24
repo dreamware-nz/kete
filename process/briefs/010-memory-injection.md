@@ -1,7 +1,7 @@
 ---
 id: 010-memory-injection
 date: 2026-05-24
-status: accepted
+status: shipped
 from-idea: 2026-05-24-kete
 design: null
 adrs: []

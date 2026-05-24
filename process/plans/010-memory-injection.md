@@ -1,7 +1,7 @@
 ---
 id: 010-memory-injection
 date: 2026-05-24
-status: active
+status: done
 brief: 010-memory-injection
 design: null
 adrs: []

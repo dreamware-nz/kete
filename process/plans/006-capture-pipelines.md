@@ -1,7 +1,7 @@
 ---
 id: 006-capture-pipelines
 date: 2026-05-24
-status: active
+status: done
 brief: 006-capture-pipelines
 design: null
 adrs: [0014-jsonl-session-poll-vs-hooks]
