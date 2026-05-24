@@ -30,6 +30,7 @@ A `kete` cobra binary with the v1 subcommand surface, a single error path that a
 - **Slice:** `var version = "dev"`; cobra `Version` field.
 - **Context:** `cmd/kete/main.go`.
 - **Done when:** `go build -ldflags "-X main.version=0.1.0"` → `kete --version` → `0.1.0`.
+- **Status:** done 2026-05-24 — satisfied by phase-1 code (`Version: version`); verified `kete version 0.1.0`.
 
 ### Phase 3 — `withStore` helper
 
