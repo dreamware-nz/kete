@@ -2,12 +2,17 @@
 # install.sh — fetch the latest kete release binary and drop it on PATH.
 #
 # Usage:
-#   # private repo (current — needs gh CLI authenticated):
-#   gh release download v0.1.0 --repo dreamware-nz/kete \
-#     --pattern install.sh --output - | sh
-#
-#   # public repo (post-public-release):
 #   curl -fsSL https://raw.githubusercontent.com/dreamware-nz/kete/main/install.sh | sh
+#
+# Pin a version:
+#   curl -fsSL https://raw.githubusercontent.com/dreamware-nz/kete/main/install.sh \
+#     | sh -s -- v0.1.0
+#
+# Override the install dir (PREFIX doesn't propagate through curl|sh,
+# so save the script first):
+#   curl -fsSL https://raw.githubusercontent.com/dreamware-nz/kete/main/install.sh \
+#     -o /tmp/install.sh
+#   PREFIX=/usr/local sh /tmp/install.sh
 #
 # Honours:
 #   PREFIX   — install dir (default $HOME/.local)
