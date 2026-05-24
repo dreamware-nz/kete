@@ -1,10 +1,10 @@
 // Package bedrock is the AWS Bedrock upstream adapter.
 //
 // Differs from anthropic-direct on three axes (ADR 0014):
-//   1. SigV4 per request via aws-sdk-go-v2.
-//   2. Body re-shape: drop "model", set "anthropic_version" body
-//      field, point URL at /model/{id}/invoke[-with-response-stream].
-//   3. Event-stream → SSE demux on the response.
+//  1. SigV4 per request via aws-sdk-go-v2.
+//  2. Body re-shape: drop "model", set "anthropic_version" body
+//     field, point URL at /model/{id}/invoke[-with-response-stream].
+//  3. Event-stream → SSE demux on the response.
 package bedrock
 
 import (
@@ -27,9 +27,9 @@ import (
 )
 
 const (
-	bedrockHostFmt   = "bedrock-runtime.%s.amazonaws.com"
-	bedrockBodyVer   = "bedrock-2023-05-31"
-	signingService   = "bedrock"
+	bedrockHostFmt = "bedrock-runtime.%s.amazonaws.com"
+	bedrockBodyVer = "bedrock-2023-05-31"
+	signingService = "bedrock"
 )
 
 // Adapter implements adapter.Wire against AWS Bedrock.

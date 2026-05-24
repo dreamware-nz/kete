@@ -17,10 +17,10 @@ type previewArgs struct {
 }
 
 type previewItem struct {
-	ID            string   `json:"id"`
-	Summary       string   `json:"summary"`
-	FilesTouched  []string `json:"files_touched,omitempty"`
-	CreatedAt     string   `json:"created_at"`
+	ID           string   `json:"id"`
+	Summary      string   `json:"summary"`
+	FilesTouched []string `json:"files_touched,omitempty"`
+	CreatedAt    string   `json:"created_at"`
 }
 
 type previewResult struct {

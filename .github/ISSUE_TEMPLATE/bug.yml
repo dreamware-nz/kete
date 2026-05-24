@@ -1,0 +1,61 @@
+name: bug
+description: Something kete does wrong, or fails to do
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for filing. kete is small enough that a clear repro
+        usually maps directly to a fix.
+
+  - type: input
+    id: version
+    attributes:
+      label: kete version
+      description: Output of `kete --version`
+      placeholder: kete version 0.1.0
+    validations:
+      required: true
+
+  - type: dropdown
+    id: upstream
+    attributes:
+      label: Upstream
+      options:
+        - anthropic-direct
+        - cc-proxy
+        - bedrock
+        - "n/a (not a forwarding bug)"
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: What you ran
+      description: Exact commands, env vars (redact secrets), and the body you sent if relevant
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: What happened
+      description: Output, logs, error messages
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else
+      description: e.g. macOS or Linux, arch, your project_path, the model id

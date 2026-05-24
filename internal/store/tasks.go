@@ -183,9 +183,9 @@ type scanner interface {
 
 func scanTask(s scanner) (*Task, error) {
 	var (
-		t                          Task
-		decsJSON, filesJSON        string
-		createdStr, updatedStr     string
+		t                      Task
+		decsJSON, filesJSON    string
+		createdStr, updatedStr string
 	)
 	if err := s.Scan(
 		&t.ID, &t.ProjectPath, &t.UserID, &t.SystemName, &t.Goal,

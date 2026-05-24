@@ -1,0 +1,91 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: test (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: vet
+        run: go vet ./...
+
+      - name: test
+        run: go test -race -count=1 ./...
+
+      - name: build
+        run: make build
+
+      - name: smoke
+        run: |
+          ./bin/kete --version
+          ./bin/kete --help > /dev/null
+
+  lint:
+    name: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: gofmt
+        run: |
+          unformatted=$(gofmt -l . | grep -v '^\.git/' || true)
+          if [ -n "$unformatted" ]; then
+            echo "::error::gofmt would change the following files:"
+            echo "$unformatted"
+            exit 1
+          fi
+
+      - name: tidy check
+        run: |
+          go mod tidy
+          if ! git diff --quiet -- go.mod go.sum; then
+            echo "::error::go.mod or go.sum is not tidy"
+            git --no-pager diff -- go.mod go.sum
+            exit 1
+          fi
+
+  docs:
+    name: docs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: regenerate
+        run: make docs
+
+      - name: drift check
+        run: |
+          if ! git diff --quiet -- docs/reference/cli.md; then
+            echo "::error::docs/reference/cli.md is out of date — run 'make docs'"
+            git --no-pager diff -- docs/reference/cli.md
+            exit 1
+          fi

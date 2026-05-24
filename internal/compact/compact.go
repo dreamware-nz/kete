@@ -18,11 +18,11 @@ import (
 
 // Summary is the structured replacement for a long conversation.
 type Summary struct {
-	Goal           string             `json:"goal"`
-	Decisions      []extract.Decision `json:"decisions"`
-	Constraints    []string           `json:"constraints"`
-	CurrentState   string             `json:"current_state"`
-	OpenQuestions  []string           `json:"open_questions"`
+	Goal          string             `json:"goal"`
+	Decisions     []extract.Decision `json:"decisions"`
+	Constraints   []string           `json:"constraints"`
+	CurrentState  string             `json:"current_state"`
+	OpenQuestions []string           `json:"open_questions"`
 }
 
 // Compute runs the compact_summary.txt prompt against the captured
@@ -53,7 +53,7 @@ func Compute(ctx context.Context, c *extract.Client, conversation string) (*Summ
 // a synchronous Compute.
 type Cache struct {
 	mu        sync.Mutex
-	summaries map[string]*Summary // session id -> summary
+	summaries map[string]*Summary      // session id -> summary
 	pending   map[string]chan struct{} // session id -> done channel
 }
 

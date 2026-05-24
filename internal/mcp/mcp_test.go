@@ -79,11 +79,11 @@ func TestServer_PingInitializeToolsCall(t *testing.T) {
 	cwd, _ := os.Getwd()
 	for i, goal := range []string{"refactor auth flow", "fix flaky test"} {
 		err := db.CreateTask(context.Background(), &store.Task{
-			ID:          "task-" + string(rune('0'+i)),
-			ProjectPath: cwd,
-			Source:      "test",
-			Goal:        goal,
-			Decisions:   []store.Decision{{Choice: "X", Rationale: "Y"}},
+			ID:             "task-" + string(rune('0'+i)),
+			ProjectPath:    cwd,
+			Source:         "test",
+			Goal:           goal,
+			Decisions:      []store.Decision{{Choice: "X", Rationale: "Y"}},
 			ReasoningTrace: "trace " + goal,
 		})
 		if err != nil {

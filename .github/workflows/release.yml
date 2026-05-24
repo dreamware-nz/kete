@@ -1,0 +1,96 @@
+name: release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'tag to release (e.g. v0.1.0)'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # tags
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: resolve tag
+        id: tag
+        run: |
+          if [ -n "${{ inputs.tag }}" ]; then
+            TAG="${{ inputs.tag }}"
+          else
+            TAG="${GITHUB_REF##*/}"
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+
+      - name: build release binaries
+        run: make release VERSION=${{ steps.tag.outputs.version }}
+
+      - name: sanity-check
+        run: |
+          file dist/kete-* | tee dist/file.txt
+          # darwin binaries can't run on linux; just check they exist + are non-empty.
+          for f in dist/kete-darwin-amd64 dist/kete-darwin-arm64 dist/kete-linux-amd64 dist/kete-linux-arm64 dist/SHA256SUMS; do
+            test -s "$f" || (echo "missing/empty: $f" >&2; exit 1)
+          done
+          # The linux/amd64 binary should run on the runner.
+          ./dist/kete-linux-amd64 --version | tee /tmp/v.txt
+          test "$(cat /tmp/v.txt)" = "kete version ${{ steps.tag.outputs.version }}"
+          # Verify SHA256SUMS is consistent.
+          (cd dist && sha256sum -c SHA256SUMS)
+
+      - name: extract release notes
+        id: notes
+        run: |
+          # Pull the section between this version's heading and the next ##.
+          version="${{ steps.tag.outputs.version }}"
+          awk -v v="$version" '
+            /^## / {
+              if (in_section) exit
+              if (index($0, v)) { in_section=1; next }
+            }
+            in_section { print }
+          ' CHANGELOG.md > /tmp/notes.md
+          if [ ! -s /tmp/notes.md ]; then
+            echo "No CHANGELOG entry for $version; using a stub." >&2
+            echo "kete $version" > /tmp/notes.md
+          fi
+          echo "path=/tmp/notes.md" >> "$GITHUB_OUTPUT"
+
+      - name: publish release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          tag="${{ steps.tag.outputs.tag }}"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "Release $tag exists; uploading assets (clobber)."
+            gh release upload "$tag" \
+              dist/kete-darwin-amd64 \
+              dist/kete-darwin-arm64 \
+              dist/kete-linux-amd64 \
+              dist/kete-linux-arm64 \
+              dist/SHA256SUMS \
+              --clobber
+          else
+            gh release create "$tag" \
+              --title "$tag" \
+              --notes-file "${{ steps.notes.outputs.path }}" \
+              dist/kete-darwin-amd64 \
+              dist/kete-darwin-arm64 \
+              dist/kete-linux-amd64 \
+              dist/kete-linux-arm64 \
+              dist/SHA256SUMS
+          fi

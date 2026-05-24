@@ -19,14 +19,14 @@ import (
 
 // TestProxy_CompactionFires_NextRequestRewritten:
 //
-// 1. Set warn=10 and clear=20 token thresholds via env so the test
-//    can trip them with small fake usage numbers.
-// 2. Send request #1 — upstream returns SSE with usage that crosses
-//    BOTH warn and clear thresholds in one go.
-// 3. Wait for the background StartCompute to finish so the cache has
-//    a Summary.
-// 4. Send request #2 — its body should have been rewritten by
-//    compact.Apply: messages array replaced with [<summary>, <next prompt>].
+//  1. Set warn=10 and clear=20 token thresholds via env so the test
+//     can trip them with small fake usage numbers.
+//  2. Send request #1 — upstream returns SSE with usage that crosses
+//     BOTH warn and clear thresholds in one go.
+//  3. Wait for the background StartCompute to finish so the cache has
+//     a Summary.
+//  4. Send request #2 — its body should have been rewritten by
+//     compact.Apply: messages array replaced with [<summary>, <next prompt>].
 func TestProxy_CompactionFires_NextRequestRewritten(t *testing.T) {
 	dir := t.TempDir()
 	resolvedDir, _ := filepath.EvalSymlinks(dir)
