@@ -45,25 +45,38 @@ func injectMemory(ctx context.Context, db *store.DB, project string, rawBody []b
 // segment without us needing to parse it back out. Uses
 // inject.Preview so the wire shape (and the 8-char ids) match what
 // MCP's kete_expand resolves — see plan 010 phase 6.
+//
+// Content is emitted as a list of typed blocks rather than a bare
+// string. Anthropic-direct accepts both shapes; Bedrock-on-Anthropic
+// requires the typed-block form ("messages.N.content.0.type: Field
+// required" otherwise). Live-caught against Crush + Bedrock.
 func buildMemoryPayload(tasks []*store.Task) ([]byte, error) {
 	var b strings.Builder
 	for _, t := range tasks {
 		b.WriteString(inject.Preview(t))
 	}
 	msg := map[string]any{
-		"role":    "user",
-		"content": b.String(),
+		"role": "user",
+		"content": []any{
+			map[string]any{"type": "text", "text": b.String()},
+		},
 	}
 	return json.Marshal(msg)
 }
 
 // injectCorrectionPayload splices a kete-flavoured correction message
 // into the request body. Same scheme as memory injection: prefer the
-// cache-breakpoint splice; fall back to messages-array tail.
+// cache-breakpoint splice; fall back to messages-array tail. Same
+// Bedrock-friendly typed-block content shape.
 func injectCorrectionPayload(rawBody []byte, correction string) ([]byte, error) {
 	msg := map[string]any{
-		"role":    "user",
-		"content": "<kete:correction>" + escapeXML(correction) + "</kete:correction>",
+		"role": "user",
+		"content": []any{
+			map[string]any{
+				"type": "text",
+				"text": "<kete:correction>" + escapeXML(correction) + "</kete:correction>",
+			},
+		},
 	}
 	payload, err := json.Marshal(msg)
 	if err != nil {
