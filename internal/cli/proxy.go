@@ -1,9 +1,14 @@
 package cli
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"os/signal"
+	"syscall"
 
+	"github.com/dreamware-nz/kete/internal/proxy"
+	"github.com/dreamware-nz/kete/internal/store"
 	"github.com/spf13/cobra"
 )
 
@@ -18,8 +23,20 @@ func newProxyCmd() *cobra.Command {
 		Short: "Run the local HTTP proxy",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			fmt.Fprintln(cmd.OutOrStdout(), errNotImplemented)
-			return nil
+			cfg, err := proxy.LoadConfig()
+			if err != nil {
+				return err
+			}
+			return withStore(func(db *store.DB) error {
+				srv := proxy.NewServer(cfg, db)
+				ctx, stop := signal.NotifyContext(context.Background(),
+					syscall.SIGINT, syscall.SIGTERM)
+				defer stop()
+				fmt.Fprintf(cmd.ErrOrStderr(),
+					"kete proxy listening on %s (debug=%t, extended-cache=%t)\n",
+					srv.Addr(), debug, extendedCache)
+				return srv.Run(ctx)
+			})
 		},
 	}
 	cmd.Flags().BoolVar(&debug, "debug", false, "enable verbose request/response logging")
