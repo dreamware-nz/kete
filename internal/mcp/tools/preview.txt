@@ -1,0 +1,11 @@
+kete_preview — return up to 3 candidate prior-task previews, each with an 8-char id and a one-line summary.
+
+Call this on every fresh prompt. Cheap (one local SQLite query). The 8-char id you get back is what you pass to kete_expand to fetch the full reasoning trace — it's a process-lifetime handle, not a database row id, so don't store it across MCP sessions.
+
+Args:
+  context: the user's prompt text or a short summary of it.
+  mode:    "project" (default) restricts to the kete proxy's current project_path; "all" searches every project.
+
+Returns: { previews: [{id, summary, files_touched, created_at}, ...] }
+
+If you call kete_preview and get useful previews, follow up with kete_expand on the most relevant id before doing exploratory work. Skipping the call wastes tokens re-investigating things prior sessions already figured out.

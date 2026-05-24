@@ -1,9 +1,12 @@
 package cli
 
 import (
-	"bufio"
-	"fmt"
+	"context"
+	"os"
+	"path/filepath"
 
+	"github.com/dreamware-nz/kete/internal/mcp"
+	"github.com/dreamware-nz/kete/internal/store"
 	"github.com/spf13/cobra"
 )
 
@@ -13,16 +16,25 @@ func newMCPCmd() *cobra.Command {
 		Short: "Run the stdio MCP server",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			// Drain stdin so a piping client doesn't see EPIPE; the
-			// real JSON-RPC loop replaces this in plan 003.
-			r := bufio.NewReader(cmd.InOrStdin())
-			for {
-				if _, err := r.ReadString('\n'); err != nil {
-					break
+			return withStore(func(db *store.DB) error {
+				logFile, err := openMCPLog()
+				if err != nil {
+					return err
 				}
-			}
-			fmt.Fprintln(cmd.OutOrStdout(), errNotImplemented)
-			return nil
+				defer logFile.Close()
+				srv := mcp.NewServer(db, Version, logFile)
+				return srv.Serve(context.Background(), cmd.InOrStdin(), cmd.OutOrStdout())
+			})
 		},
 	}
+}
+
+// openMCPLog opens ~/.kete/kete-mcp.log (append, 0600).
+func openMCPLog() (*os.File, error) {
+	dir, err := store.DefaultDir()
+	if err != nil {
+		return nil, err
+	}
+	return os.OpenFile(filepath.Join(dir, "kete-mcp.log"),
+		os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
 }

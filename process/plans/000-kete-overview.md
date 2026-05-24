@@ -58,6 +58,7 @@ This plan sequences the per-component plans. Each phase here is "land plan NNN t
 - **Context:** `process/plans/003-mcp-server.md`.
 - **Depends-on:** `[phase-1, phase-2]`
 - **Done when:** plan 003 status `done`.
+- **Status:** done 2026-05-24 — `kete mcp` ships `initialize`, `tools/list`, `tools/call` for `kete_preview` and `kete_expand`; e2e verified.
 
 ### Phase 6 — Capture pipelines ready
 

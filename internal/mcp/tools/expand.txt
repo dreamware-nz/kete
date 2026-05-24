@@ -1,0 +1,10 @@
+kete_expand — return the full reasoning trace for a previewed task.
+
+Pass an 8-char id from a recent kete_preview response. Returns the task's stated goal, the decisions made (with rationale), the list of files touched, and the captured reasoning trace.
+
+Args:
+  id: the 8-char id from kete_preview (e.g. "a3f1b2c4").
+
+Returns: { goal, decisions: [{choice, rationale}, ...], files_touched: [...], reasoning_trace, created_at }
+
+kete_expand is the read-only follow-up to a preview. If you didn't run kete_preview first this session, the id won't resolve — call kete_preview, get a fresh id, then expand.

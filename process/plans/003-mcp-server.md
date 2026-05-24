@@ -1,7 +1,7 @@
 ---
 id: 003-mcp-server
 date: 2026-05-24
-status: draft
+status: done
 brief: 003-mcp-server
 design: null
 adrs: [0012-mcp-stdio-jsonrpc-library, 0008-mcp-tools-and-descriptions]
