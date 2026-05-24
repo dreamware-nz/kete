@@ -1,7 +1,7 @@
 ---
 id: 007-anti-drift
 date: 2026-05-24
-status: accepted
+status: shipped
 from-idea: 2026-05-24-kete
 design: null
 adrs: [0011-drift-correction-four-levels]
