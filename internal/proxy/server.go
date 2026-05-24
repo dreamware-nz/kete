@@ -235,6 +235,19 @@ func (s *Server) handleMessages(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// extract.BypassHeader on the inbound request short-circuits
+	// capture + injection. The extractor sets this when it loops
+	// back through the local proxy (KETE_ANTHROPIC_URL pointed at
+	// kete itself) so we don't capture-then-enrich-then-capture
+	// indefinitely.
+	if r.Header.Get(extract.BypassHeader) != "" {
+		sanitised := SanitiseHeaders(r.Header)
+		if err := ad.Forward(r.Context(), rawBody, sanitised, w); err != nil {
+			fmt.Fprintf(os.Stderr, "forward(%s) bypass: %v\n", up, err)
+		}
+		return
+	}
+
 	project := projectPath()
 
 	// If a prior turn crossed the clear threshold, rewrite the body

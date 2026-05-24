@@ -49,10 +49,22 @@ Honoured env vars:
 | ------------------ | ------------ | ------------------------------------ |
 | `KETE_PORT`        | `8765`       | Proxy listens here                   |
 | `KETE_UPSTREAM`    | `bedrock`    | `bedrock` \| `cc-proxy` \| `anthropic` |
+| `KETE_DRIFT_MODEL` | upstream-shaped | Model the extractor calls         |
 | `AWS_REGION`       | `us-west-2`  | Bedrock only                         |
 | `AWS_PROFILE`      | (unset)      | Bedrock only, optional               |
 | `KETE_CC_PROXY_KEY`| —            | cc-proxy: required                   |
 | `ANTHROPIC_API_KEY`| —            | anthropic: required                  |
+
+The installer also sets `KETE_ANTHROPIC_URL=http://127.0.0.1:$PORT`
+so capture-row enrichment loops back through this same proxy and
+inherits whichever upstream you picked. The extractor sends an
+`x-kete-bypass` header on every request and the proxy
+short-circuits capture + injection on those, so there's no loop and
+no memory pollution.
+
+`KETE_DRIFT_MODEL` defaults to:
+- `us.anthropic.claude-haiku-4-5-20251001-v1:0` for `bedrock`
+- `claude-haiku-4-5-20251001` for `cc-proxy` and `anthropic`
 
 ## What the agent does
 
