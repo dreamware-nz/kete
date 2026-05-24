@@ -24,6 +24,7 @@ This plan sequences the per-component plans. Each phase here is "land plan NNN t
 - **Context:** `process/plans/004-memory-store.md`.
 - **Depends-on:** `[]`
 - **Done when:** plan 004 status `done`.
+- **Status:** done — plan 004 complete prior to this run.
 
 ### Phase 2 — CLI shell ready
 
@@ -32,6 +33,7 @@ This plan sequences the per-component plans. Each phase here is "land plan NNN t
 - **Context:** `process/plans/001-cli-shell.md`.
 - **Depends-on:** `[phase-1]`
 - **Done when:** plan 001 status `done`.
+- **Status:** done 2026-05-24 — 13 phases landed; `kete` binary builds, `make docs` regenerates `docs/reference/cli.md`.
 
 ### Phase 3 — Extraction client ready
 

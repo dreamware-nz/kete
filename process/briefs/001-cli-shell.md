@@ -1,7 +1,7 @@
 ---
 id: 001-cli-shell
 date: 2026-05-24
-status: accepted
+status: shipped
 from-idea: 2026-05-24-kete
 design: null
 adrs: [0010-cli-framework]

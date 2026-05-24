@@ -1,7 +1,7 @@
 ---
 id: 001-cli-shell
 date: 2026-05-24
-status: active
+status: done
 brief: 001-cli-shell
 design: null
 adrs: [0010-cli-framework]
