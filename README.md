@@ -16,6 +16,10 @@ One-liner (macOS, Linux; downloads the latest release into `~/.local/bin`):
 curl -fsSL https://raw.githubusercontent.com/dreamware-nz/kete/main/install.sh | sh
 ```
 
+The installer falls back to `gh release download` when anonymous
+HTTP fails, so it works against the private repo if you have the
+`gh` CLI authenticated. SHA256 verification runs end-to-end.
+
 Or build from source:
 
 ```sh

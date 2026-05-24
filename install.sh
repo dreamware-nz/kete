@@ -68,11 +68,31 @@ tmpdir=$(mktemp -d)
 trap 'rm -rf "$tmpdir"' EXIT
 
 echo "kete: downloading $VERSION ($binary)"
-curl -fsSL --output "$tmpdir/$binary" "$url"
+# Try anonymous curl first (works for public repos); fall back to
+# `gh release download` (works for private repos via the user's
+# already-authenticated gh CLI).
+if ! curl -fsSL --output "$tmpdir/$binary" "$url" 2>/dev/null; then
+  if command -v gh >/dev/null 2>&1; then
+    echo "kete: anonymous download failed, retrying via gh CLI"
+    if ! gh release download "$VERSION" \
+      --repo "$REPO" \
+      --pattern "$binary" \
+      --dir "$tmpdir"; then
+      echo "kete: gh release download failed" >&2
+      exit 1
+    fi
+  else
+    echo "kete: download failed and gh CLI not installed" >&2
+    echo "  install gh (https://cli.github.com) or download manually:" >&2
+    echo "    $url" >&2
+    exit 1
+  fi
+fi
 
 # --- verify (best-effort; SHA256SUMS may not exist on older releases) ---
 
-if curl -fsSL --output "$tmpdir/SHA256SUMS" "$shaurl" 2>/dev/null; then
+if curl -fsSL --output "$tmpdir/SHA256SUMS" "$shaurl" 2>/dev/null \
+   || gh release download "$VERSION" --repo "$REPO" --pattern SHA256SUMS --dir "$tmpdir" 2>/dev/null; then
   expected=$(grep " $binary\$" "$tmpdir/SHA256SUMS" | awk '{print $1}')
   if [ -n "$expected" ]; then
     if command -v shasum >/dev/null 2>&1; then
