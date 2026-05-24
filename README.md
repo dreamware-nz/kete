@@ -10,26 +10,42 @@
 
 ## Install
 
-One-liner (macOS, Linux; downloads the latest release into `~/.local/bin`):
+The repo is private, so the install path uses the GitHub CLI
+(authenticated `gh`):
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/dreamware-nz/kete/main/install.sh | sh
+gh release download v0.1.0 --repo dreamware-nz/kete \
+  --pattern install.sh --output - | sh
 ```
 
-The installer falls back to `gh release download` when anonymous
-HTTP fails, so it works against the private repo if you have the
-`gh` CLI authenticated. SHA256 verification runs end-to-end.
+Drops `kete` in `~/.local/bin`. To install elsewhere, save the
+script first and pass `PREFIX`:
 
-Or build from source:
+```sh
+gh release download v0.1.0 --repo dreamware-nz/kete \
+  --pattern install.sh --output install.sh
+PREFIX=/usr/local sh install.sh
+```
+
+Or, with the repo cloned:
 
 ```sh
 git clone git@github.com:dreamware-nz/kete.git
 cd kete
-make install                        # builds and installs into ~/.local/bin/kete
+make install                    # ~/.local/bin (override with PREFIX=)
 ```
 
-`make build` puts the binary at `bin/kete` if you'd rather run it
-out of the tree.
+The installer detects os/arch, downloads the matching binary from
+the GitHub Release via `gh`, verifies SHA256, and drops `kete` in
+`$PREFIX/bin`. `make build` puts the binary at `bin/kete` if you'd
+rather run it out of the tree.
+
+When the repo is made public, the curl pipe will work too:
+
+```sh
+# (post-public-release; doesn't work today)
+curl -fsSL https://raw.githubusercontent.com/dreamware-nz/kete/main/install.sh | sh
+```
 
 ## Quickstart
 

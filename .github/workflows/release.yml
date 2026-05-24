@@ -83,6 +83,7 @@ jobs:
               dist/kete-linux-amd64 \
               dist/kete-linux-arm64 \
               dist/SHA256SUMS \
+              install.sh \
               --clobber
           else
             gh release create "$tag" \
@@ -92,5 +93,6 @@ jobs:
               dist/kete-darwin-arm64 \
               dist/kete-linux-amd64 \
               dist/kete-linux-arm64 \
-              dist/SHA256SUMS
+              dist/SHA256SUMS \
+              install.sh
           fi
