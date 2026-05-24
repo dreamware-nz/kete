@@ -1,0 +1,1 @@
+- 2026-05-24 — plan 006 (capture pipelines) collapsed: only the 'proxy' source ships in v1. Brief 006's five-source vision (proxy + Cursor/Zed/Codex/Antigravity scanners) deferred until a non-Crush user appears. Captured here so the next process-retrospect proposes a brief 006 revision instead of a new ADR.
