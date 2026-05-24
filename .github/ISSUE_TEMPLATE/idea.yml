@@ -1,0 +1,27 @@
+name: idea
+description: An idea for kete (raw, pre-commitment)
+labels: [idea]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        kete uses the dreamware-nz process chain — idea → brief →
+        ADR(s) → plan → execute. This issue is the "idea" stage.
+        Rough is fine. Don't try to solve it; just capture the shape
+        of the problem.
+
+  - type: textarea
+    id: shape
+    attributes:
+      label: Shape of the idea
+      description: Free-form. What's the friction? What might help?
+    validations:
+      required: true
+
+  - type: textarea
+    id: who
+    attributes:
+      label: Who would this help
+      description: Real users by name where possible. "Future me" is fine.
+    validations:
+      required: true

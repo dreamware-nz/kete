@@ -26,10 +26,10 @@ import (
 )
 
 const (
-	idleThreshold      = 4 * time.Minute
-	maxIdleTotal       = 10 * time.Minute
-	tickInterval       = 60 * time.Second
-	maxPerIdlePeriod   = 2
+	idleThreshold    = 4 * time.Minute
+	maxIdleTotal     = 10 * time.Minute
+	tickInterval     = 60 * time.Second
+	maxPerIdlePeriod = 2
 )
 
 // keepalivePayload is the byte-identical-shape we splice into messages.

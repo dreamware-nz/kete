@@ -71,8 +71,8 @@ func (s *Server) resolveExpandForLoop(ctx context.Context, displayID string) str
 	t, err := s.store.FindByShortID(ctx, inject.ShortID, displayID)
 	if err != nil {
 		b, _ := json.Marshal(map[string]any{
-			"error":   "unknown id; not found in recent tasks",
-			"id":      displayID,
+			"error": "unknown id; not found in recent tasks",
+			"id":    displayID,
 		})
 		return string(b)
 	}

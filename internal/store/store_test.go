@@ -63,7 +63,7 @@ func TestOpenAppliesWALAndMigrates(t *testing.T) {
 
 	for _, table := range []string{"tasks", "steps", "drift_log", "sync_tracker", "schema_migrations"} {
 		var n int
-		if err := db.QueryRow(`SELECT COUNT(*) FROM `+table).Scan(&n); err != nil {
+		if err := db.QueryRow(`SELECT COUNT(*) FROM ` + table).Scan(&n); err != nil {
 			t.Fatalf("count %s: %v", table, err)
 		}
 	}

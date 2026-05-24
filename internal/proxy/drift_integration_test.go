@@ -45,8 +45,8 @@ func TestProxy_DriftFiresAndCorrectsNextRequest(t *testing.T) {
 	}
 
 	var (
-		upstreamHits  atomic.Int32
-		latestUpBody  atomic.Pointer[[]byte]
+		upstreamHits atomic.Int32
+		latestUpBody atomic.Pointer[[]byte]
 	)
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
