@@ -50,8 +50,30 @@ func forward(
 	}
 	w.WriteHeader(resp.StatusCode)
 
-	if _, err := io.Copy(w, resp.Body); err != nil && !errors.Is(err, context.Canceled) {
-		return fmt.Errorf("stream response: %w", err)
+	// SSE: flush per chunk so the IDE sees deltas as they arrive.
+	// We flush after every Read regardless of content-type — flushing
+	// non-SSE responses costs nothing measurable and keeps the path
+	// uniform.
+	flusher, _ := w.(http.Flusher)
+	buf := make([]byte, 4096)
+	for {
+		n, rerr := resp.Body.Read(buf)
+		if n > 0 {
+			if _, werr := w.Write(buf[:n]); werr != nil {
+				return fmt.Errorf("stream response: %w", werr)
+			}
+			if flusher != nil {
+				flusher.Flush()
+			}
+		}
+		if rerr != nil {
+			if errors.Is(rerr, io.EOF) {
+				return nil
+			}
+			if errors.Is(rerr, context.Canceled) {
+				return nil
+			}
+			return fmt.Errorf("stream response: %w", rerr)
+		}
 	}
-	return nil
 }
