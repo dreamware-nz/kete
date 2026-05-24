@@ -29,6 +29,7 @@ func newRootCmd() *cobra.Command {
 	root.AddCommand(newMCPCmd())
 	root.AddCommand(newStatusCmd())
 	root.AddCommand(newTasksCmd())
+	root.AddCommand(newDriftTestCmd())
 	return root
 }
 
