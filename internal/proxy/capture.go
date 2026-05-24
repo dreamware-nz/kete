@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	capturepkg "github.com/dreamware-nz/kete/internal/capture"
 	"github.com/dreamware-nz/kete/internal/extract"
 	"github.com/dreamware-nz/kete/internal/store"
 	"github.com/google/uuid"
@@ -59,7 +60,7 @@ func (c *capture) Record(project, source string, rawBody []byte) {
 			ID:             id,
 			ProjectPath:    project,
 			Source:         source,
-			ReasoningTrace: string(body),
+			ReasoningTrace: capturepkg.ClipTrace(body),
 		}
 		if err := c.store.CreateTask(context.Background(), t); err != nil {
 			fmt.Fprintf(os.Stderr, "capture: create %s: %v\n", id, err)
@@ -80,7 +81,8 @@ func (c *capture) enrich(taskID string, body []byte) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
-	out, err := c.extractor.ExtractTask(ctx, string(body))
+	clipped := capturepkg.ClipTrace(body)
+	out, err := c.extractor.ExtractTask(ctx, clipped)
 	if err != nil {
 		// Network errors / non-JSON responses both land here. Don't
 		// noise the log under context cancellation (shutdown).
@@ -95,7 +97,7 @@ func (c *capture) enrich(taskID string, body []byte) {
 	for i, d := range out.Decisions {
 		decs[i] = store.Decision{Choice: d.Choice, Rationale: d.Rationale}
 	}
-	if err := c.store.UpdateTask(ctx, taskID, out.Goal, decs, out.FilesTouched, string(body)); err != nil {
+	if err := c.store.UpdateTask(ctx, taskID, out.Goal, decs, out.FilesTouched, clipped); err != nil {
 		fmt.Fprintf(os.Stderr, "capture: update %s: %v\n", taskID, err)
 	}
 }

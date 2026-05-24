@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 
+	"github.com/dreamware-nz/kete/internal/capture"
 	"github.com/dreamware-nz/kete/internal/inject"
 	"github.com/dreamware-nz/kete/internal/store"
 )
@@ -47,7 +48,7 @@ func (s *Server) callExpand(ctx context.Context, raw json.RawMessage) (any, *rpc
 	out := expandResult{
 		Goal:           t.Goal,
 		FilesTouched:   t.FilesTouched,
-		ReasoningTrace: t.ReasoningTrace,
+		ReasoningTrace: capture.ClipTrace([]byte(t.ReasoningTrace)),
 		CreatedAt:      t.CreatedAt.UTC().Format("2006-01-02T15:04:05Z"),
 	}
 	for _, d := range t.Decisions {

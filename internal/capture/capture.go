@@ -37,3 +37,26 @@ func NormaliseProject(raw string) string {
 	}
 	return raw
 }
+
+// TraceCap bounds reasoning_trace at storage time and at every read
+// path that fans the trace back to a model. The raw request body for
+// a long Crush session can be multiple MB; storing or returning it
+// whole is what made expand return a 3 MB blob that Crush re-sent and
+// Bedrock rejected for "prompt too long". 32 KiB is enough for a
+// human-readable tail of the conversation and well under Haiku's
+// extractor budget. The tail is what carries the most signal — the
+// turn that just ended.
+const TraceCap = 32 * 1024
+
+// TruncatedMarker is prepended to a clipped trace so readers can tell.
+const TruncatedMarker = "[kete: trace head truncated; tail kept]\n"
+
+// ClipTrace returns at most TraceCap bytes of body, keeping the tail.
+// When clipping happens, TruncatedMarker is prepended.
+func ClipTrace(body []byte) string {
+	if len(body) <= TraceCap {
+		return string(body)
+	}
+	tail := body[len(body)-TraceCap+len(TruncatedMarker):]
+	return TruncatedMarker + string(tail)
+}

@@ -8,6 +8,7 @@ import (
 	"net/http"
 
 	"github.com/dreamware-nz/kete/internal/adapter"
+	capturepkg "github.com/dreamware-nz/kete/internal/capture"
 	"github.com/dreamware-nz/kete/internal/inject"
 )
 
@@ -80,7 +81,7 @@ func (s *Server) resolveExpandForLoop(ctx context.Context, displayID string) str
 		"goal":            t.Goal,
 		"decisions":       t.Decisions,
 		"files_touched":   t.FilesTouched,
-		"reasoning_trace": t.ReasoningTrace,
+		"reasoning_trace": capturepkg.ClipTrace([]byte(t.ReasoningTrace)),
 		"created_at":      t.CreatedAt.UTC().Format("2006-01-02T15:04:05Z"),
 	}
 	b, _ := json.Marshal(out)
