@@ -25,6 +25,13 @@ const (
 	apiVersion     = "2023-06-01"
 )
 
+// BypassHeader, when present on a request to a kete proxy upstream,
+// tells the proxy to skip capture + memory injection. Used by the
+// extractor when its KETE_ANTHROPIC_URL points back at the local
+// proxy, to break the loop that would otherwise form (capture →
+// enrich-via-proxy → capture → ...).
+const BypassHeader = "x-kete-bypass"
+
 // Client is a tiny Anthropic Messages API client scoped to extraction
 // use cases (small structured JSON outputs).
 type Client struct {
@@ -192,6 +199,12 @@ func (c *Client) Send(ctx context.Context, req Request) (*Response, error) {
 	httpReq.Header.Set("content-type", "application/json")
 	httpReq.Header.Set("anthropic-version", apiVersion)
 	httpReq.Header.Set("x-api-key", c.APIKey)
+	// Tell a kete proxy upstream to skip capture + memory injection
+	// for this request. Without it, pointing extraction at the local
+	// proxy creates an infinite loop (capture-enrich → POST → capture
+	// → enrich → ...). Anthropic-direct, cc-proxy, and Bedrock all
+	// ignore unknown headers, so this is safe to send everywhere.
+	httpReq.Header.Set(BypassHeader, "1")
 
 	resp, err := c.HTTPClient.Do(httpReq)
 	if err != nil {

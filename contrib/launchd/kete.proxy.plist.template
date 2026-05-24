@@ -45,6 +45,22 @@
     <key>KETE_UPSTREAM</key><string>anthropic</string>
     <key>ANTHROPIC_API_KEY</key><string>sk-ant-...</string>
     -->
+
+    <!-- Capture-row enrichment uses the extractor. Loop it back
+         through this same proxy so it inherits the upstream you
+         picked above (no need to set ANTHROPIC_API_KEY when running
+         on Bedrock or cc-proxy). The extractor sends an
+         x-kete-bypass header on every request so the proxy
+         short-circuits capture+injection on the loop. -->
+    <key>KETE_ANTHROPIC_URL</key>
+    <string>http://127.0.0.1:8765</string>
+    <!-- Pick the model id your upstream understands.
+         For Bedrock, use an inference profile id, e.g.:
+           us.anthropic.claude-haiku-4-5-20251001-v1:0
+         For Anthropic-direct or cc-proxy:
+           claude-haiku-4-5-20251001 -->
+    <key>KETE_DRIFT_MODEL</key>
+    <string>us.anthropic.claude-haiku-4-5-20251001-v1:0</string>
   </dict>
 
   <key>RunAtLoad</key>

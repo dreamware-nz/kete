@@ -10,10 +10,16 @@
 # Honours these env vars (set them once before running):
 #   KETE_PORT            default 8765
 #   KETE_UPSTREAM        bedrock | cc-proxy | anthropic; default bedrock
+#   KETE_DRIFT_MODEL     extraction model id; defaults match upstream
 #   AWS_REGION           default $AWS_REGION or us-west-2
 #   AWS_PROFILE          (optional)
 #   KETE_CC_PROXY_KEY    (cc-proxy only)
 #   ANTHROPIC_API_KEY    (anthropic only)
+#
+# By default the script wires capture-row enrichment to loop back
+# through this proxy (KETE_ANTHROPIC_URL=http://127.0.0.1:$PORT). The
+# extractor sets x-kete-bypass on every request so the proxy
+# short-circuits capture+injection on the loop.
 
 set -eu
 
@@ -36,6 +42,14 @@ LOG_DIR="$HOME/.kete"
 KETE_PORT="${KETE_PORT:-8765}"
 KETE_UPSTREAM="${KETE_UPSTREAM:-bedrock}"
 AWS_REGION="${AWS_REGION:-us-west-2}"
+
+# Pick a sensible default extraction model for the chosen upstream.
+# The user can override KETE_DRIFT_MODEL before running.
+case "$KETE_UPSTREAM" in
+  bedrock)  default_drift_model="us.anthropic.claude-haiku-4-5-20251001-v1:0" ;;
+  *)        default_drift_model="claude-haiku-4-5-20251001" ;;
+esac
+KETE_DRIFT_MODEL="${KETE_DRIFT_MODEL:-$default_drift_model}"
 
 mkdir -p "$LOG_DIR"
 
@@ -98,6 +112,10 @@ cat > "$PLIST" <<PLIST_EOF
     <string>${KETE_PORT}</string>
     <key>KETE_UPSTREAM</key>
     <string>${KETE_UPSTREAM}</string>${extra_env}
+    <key>KETE_ANTHROPIC_URL</key>
+    <string>http://127.0.0.1:${KETE_PORT}</string>
+    <key>KETE_DRIFT_MODEL</key>
+    <string>${KETE_DRIFT_MODEL}</string>
   </dict>
   <key>RunAtLoad</key>
   <true/>
