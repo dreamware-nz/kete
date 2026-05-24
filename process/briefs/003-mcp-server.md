@@ -1,7 +1,7 @@
 ---
 id: 003-mcp-server
 date: 2026-05-24
-status: accepted
+status: shipped
 from-idea: 2026-05-24-kete
 design: null
 adrs: [0012-mcp-stdio-jsonrpc-library, 0008-mcp-tools-and-descriptions]
