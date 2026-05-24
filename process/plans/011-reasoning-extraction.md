@@ -1,7 +1,7 @@
 ---
 id: 011-reasoning-extraction
 date: 2026-05-24
-status: draft
+status: active
 brief: 011-reasoning-extraction
 design: null
 adrs: [0009-haiku-as-extraction-model]
