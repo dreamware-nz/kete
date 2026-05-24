@@ -5,8 +5,12 @@ All notable changes to kete. Format follows [Keep a Changelog](https://keepachan
 ## 0.1.0 — 2026-05-24
 
 First release. Master plan 000 complete; brief 000 success criteria
-all met (criterion #3 verified end-to-end against a stubbed Haiku;
-real-Haiku calibration is a future tuning pass, not a release gate).
+all met. Live-verified end-to-end through real AWS Bedrock against
+Anthropic Claude Haiku 4.5 (`us.anthropic.claude-haiku-4-5-20251001`):
+non-streaming and streaming round-trips, capture, and memory injection
+(seeded prior task → next request's response retrieved the secret word
+"kowhai" that lived only in the injected memory; input tokens
+jumped 22 → 101, confirming splice).
 
 ### Added
 
@@ -65,16 +69,22 @@ real-Haiku calibration is a future tuning pass, not a release gate).
 
 ### Honest gaps (deferred, not blocking 0.1.0)
 
-- **Bedrock smoke-untested.** SigV4 + event-stream demux compile and
-  pass shape tests but have not been exercised against
-  `bedrock-runtime`. Caller's AWS credentials live in the
-  environment; the byte-translation logic is what we own and that is
-  tested.
-- **cc-proxy smoke-untested.** Shape tests only; no live cc-proxy
-  round-trip.
+- **cc-proxy smoke-untested.** Shape tests only; live cc-proxy
+  round-trip needs the cc-proxy macOS app running, which is out of
+  band for this session.
+- **Anthropic-direct smoke-untested.** No `ANTHROPIC_API_KEY` in the
+  test environment; that path is identical to cc-proxy at the wire
+  level (cc-proxy's adapter literally reuses anthropic.Adapter).
+  The Bedrock live verification covers the equivalent code paths
+  (capture, inject, drift, compaction triggers) — only the
+  upstream adapter is unique.
 - **Drift fixture set deferred.** Plan 007 ships the scoring and
   correction loop; calibration of threshold accuracy against a
   hand-labelled set needs a real Haiku endpoint and judgement calls.
+  Drift on the live system needs `ANTHROPIC_API_KEY` because the
+  extractor goes Anthropic-direct (ADR 0009). A Bedrock-only
+  environment can't run extraction without a separate Anthropic key
+  — this is by design per ADR 0009.
 - **MCP cache not shared with proxy injection.** Plan 010 phase 6 —
   the proxy's inline `buildMemoryPayload` and MCP's preview cache
   are separate paths today. Both work; sharing them is mechanical.

@@ -136,6 +136,10 @@ func translateRequest(rawBody []byte) (stream bool, modelID string, body []byte,
 		stream = s
 	}
 	delete(probe, "model")
+	// Bedrock's /invoke-with-response-stream endpoint encodes the
+	// streaming choice in the URL path; the field is rejected in the
+	// body. /invoke is non-streaming by definition. Drop either way.
+	delete(probe, "stream")
 	if _, ok := probe["anthropic_version"]; !ok {
 		probe["anthropic_version"] = bedrockBodyVer
 	}
