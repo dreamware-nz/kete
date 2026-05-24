@@ -1,7 +1,7 @@
 ---
 id: 013-cc-proxy-upstream
 date: 2026-05-24
-status: accepted
+status: shipped
 from-idea: 2026-05-24-cc-proxy-upstream
 design: null
 adrs: [0015-three-upstreams-selection]

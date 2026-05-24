@@ -1,7 +1,7 @@
 ---
 id: 012-bedrock-vendor
 date: 2026-05-24
-status: accepted
+status: shipped
 from-idea: 2026-05-24-bedrock-support
 design: null
 adrs: [0014-bedrock-sigv4-and-event-stream, 0015-three-upstreams-selection]

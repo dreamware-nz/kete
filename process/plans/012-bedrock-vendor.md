@@ -1,7 +1,7 @@
 ---
 id: 012-bedrock-vendor
 date: 2026-05-24
-status: draft
+status: done
 brief: 012-bedrock-vendor
 design: null
 adrs: [0014-bedrock-sigv4-and-event-stream, 0015-three-upstreams-selection]
