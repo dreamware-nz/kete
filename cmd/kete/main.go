@@ -28,6 +28,7 @@ func newRootCmd() *cobra.Command {
 	root.AddCommand(newProxyCmd())
 	root.AddCommand(newMCPCmd())
 	root.AddCommand(newStatusCmd())
+	root.AddCommand(newTasksCmd())
 	return root
 }
 
