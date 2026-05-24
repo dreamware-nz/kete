@@ -5,6 +5,7 @@ status: draft         # draft | accepted | rejected | shipped
 from-idea: YYYY-MM-DD-slug
 design: null          # filled if a design doc is drafted
 adrs: []              # filled as ADRs are accepted
+invariants: []        # filled as invariants are captured (usually via the ADRs)
 plan: null            # filled when a plan is drafted
 ---
 
@@ -32,7 +33,7 @@ What this brief explicitly does *not* try to solve. Cuts scope before scope cuts
 
 ## Open questions
 
-Things that will need an ADR, or a design pass, or both. Listing them here is enough; the ADRs and design come later. Tag each as `[adr]`, `[design]`, or both, so the next stage knows where it goes.
+Things that will need an ADR, a design pass, an invariant captured, or some combination. Listing them here is enough; the ADRs / design / invariants come later. Tag each as `[adr]`, `[design]`, `[invariant]`, or any combination, so the next stage knows where it goes.
 
 ## Doc impact
 
