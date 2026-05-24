@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"io"
 	"os"
+	"slices"
 	"strings"
 	"testing"
 
@@ -195,7 +196,7 @@ func TestServer_PingInitializeToolsCall(t *testing.T) {
 
 // withCacheSeed pre-registers a display id → real id mapping for the
 // test. It returns the server for chaining.
-func (s *Server) withCacheSeed(displayID string, p previewItem) *Server {
+func (s *Server) withCacheSeed(displayID string, _ previewItem) *Server {
 	// Reverse-lookup the real id by re-deriving from the stored set.
 	// Tests seed sequential ids; we know the prefix.
 	for _, real := range []string{"task-0", "task-1"} {
@@ -236,10 +237,5 @@ func runRoundTripOnServer(t *testing.T, msgs []req, srv *Server) []resp {
 }
 
 func contains(xs []string, x string) bool {
-	for _, v := range xs {
-		if v == x {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(xs, x)
 }

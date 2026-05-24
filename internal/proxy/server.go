@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net"
 	"net/http"
 	"os"
@@ -288,9 +289,7 @@ func (s *Server) handleMessages(w http.ResponseWriter, r *http.Request) {
 			fmt.Fprintf(os.Stderr, "expand-loop(%s): %v\n", up, err)
 			http.Error(w, err.Error(), http.StatusBadGateway)
 		} else {
-			for k, vs := range respHdr {
-				tap.Header()[k] = vs
-			}
+			maps.Copy(tap.Header(), respHdr)
 			tap.WriteHeader(status)
 			_, _ = tap.Write(respBody)
 		}

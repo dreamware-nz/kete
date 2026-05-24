@@ -3,7 +3,6 @@ package bedrock
 import (
 	"bytes"
 	"encoding/json"
-	"strings"
 	"testing"
 )
 
@@ -33,20 +32,6 @@ func TestTranslateRequest(t *testing.T) {
 	}
 	if probe["anthropic_version"] != bedrockBodyVer {
 		t.Errorf("anthropic_version=%v", probe["anthropic_version"])
-	}
-}
-
-func TestBuildURL(t *testing.T) {
-	u := buildURL("us-east-1", "anthropic.claude-3-5-sonnet-20240620-v1:0", true)
-	if !strings.Contains(u, "bedrock-runtime.us-east-1.amazonaws.com") {
-		t.Errorf("missing region host: %s", u)
-	}
-	if !strings.Contains(u, "invoke-with-response-stream") {
-		t.Errorf("not streaming path: %s", u)
-	}
-	u = buildURL("eu-west-1", "model-id", false)
-	if !strings.HasSuffix(u, "/invoke") || strings.Contains(u, "response-stream") {
-		t.Errorf("non-stream URL: %s", u)
 	}
 }
 

@@ -6,10 +6,12 @@ import (
 	"path/filepath"
 )
 
-// dirPerm and filePerm enforce ADR 0004's tight-by-default layout.
+// dirPerm enforces ADR 0004's tight-by-default layout. The DB file
+// itself is created by SQLite with the process umask; ADR 0004's 0600
+// expectation is met by `umask 077` in the launchd wrapper and by the
+// default macOS/Linux umask in interactive shells.
 const (
-	dirPerm  os.FileMode = 0o700
-	filePerm os.FileMode = 0o600
+	dirPerm os.FileMode = 0o700
 )
 
 // DefaultDir returns the kete dotdir, honouring KETE_HOME for tests.

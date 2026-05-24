@@ -2,7 +2,6 @@ package cli
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os/signal"
 	"syscall"
@@ -11,10 +10,6 @@ import (
 	"github.com/dreamware-nz/kete/internal/store"
 	"github.com/spf13/cobra"
 )
-
-// errNotImplemented is the placeholder return for stub subcommands.
-// Phases that wire real behaviour replace it.
-var errNotImplemented = errors.New("not yet implemented")
 
 func newProxyCmd() *cobra.Command {
 	var debug, extendedCache bool
