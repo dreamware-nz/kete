@@ -113,6 +113,18 @@ func (d *DB) ListTasks(ctx context.Context, projectPath string) ([]*Task, error)
 	return collectTasks(rows)
 }
 
+// ListAllTasks returns every task across every project, newest first.
+// Used by `kete status --all`.
+func (d *DB) ListAllTasks(ctx context.Context) ([]*Task, error) {
+	rows, err := d.QueryContext(ctx,
+		taskSelectFields+` FROM tasks ORDER BY created_at DESC`)
+	if err != nil {
+		return nil, fmt.Errorf("list all tasks: %w", err)
+	}
+	defer rows.Close()
+	return collectTasks(rows)
+}
+
 // SearchTasks does a LIKE search over goal + reasoning_trace.
 // FTS5 deferred (plan 004 Out of scope).
 func (d *DB) SearchTasks(ctx context.Context, query string) ([]*Task, error) {
