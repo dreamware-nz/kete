@@ -250,6 +250,25 @@ func (s *Server) handleMessages(w http.ResponseWriter, r *http.Request) {
 
 	project := projectPath()
 
+	// Hard size cap: a session can outgrow Bedrock's 1M token cap
+	// faster than usage-driven compaction can fire (which observes
+	// upstream message_delta.usage on a successful response — once
+	// every response is a 400, the observer never sees clear). When
+	// the inbound body is itself too big, drop the middle of the
+	// conversation in place. This is the safety valve, not a
+	// substitute for proper compaction. ADR 0006 exception, same
+	// rationale as compact.Apply.
+	if max := envInt("KETE_HARD_TRUNCATE_BYTES", defaultHardTruncateBytes); len(rawBody) >= max {
+		keep := envInt("KETE_HARD_TRUNCATE_KEEP", defaultHardTruncateKeep)
+		if rewritten, did, err := compact.TruncateLargeBody(rawBody, keep); err == nil && did {
+			fmt.Fprintf(os.Stderr, "proxy: hard-truncated request body %d -> %d bytes (keep last %d turns)\n",
+				len(rawBody), len(rewritten), keep)
+			rawBody = rewritten
+		} else if err != nil {
+			fmt.Fprintf(os.Stderr, "proxy: hard-truncate failed: %v\n", err)
+		}
+	}
+
 	// If a prior turn crossed the clear threshold, rewrite the body
 	// to drop the conversation in favour of the structured summary.
 	// This is the deliberate ADR 0006 exception: compaction *is* a

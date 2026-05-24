@@ -22,6 +22,15 @@ type compactHook struct {
 const (
 	defaultCompactWarnTokens  = 160_000
 	defaultCompactClearTokens = 180_000
+
+	// Hard size cap on the *inbound* request body. Below this, we
+	// trust usage-driven compaction. At-or-above, the proxy drops
+	// the middle of the conversation (compact.TruncateLargeBody)
+	// before forwarding so the request fits the upstream's per-call
+	// cap. 1 MiB ≈ 250k tokens — well under Bedrock's 1M cap with
+	// headroom for system + tools.
+	defaultHardTruncateBytes = 1 << 20
+	defaultHardTruncateKeep  = 30
 )
 
 func newCompactHook() *compactHook {
