@@ -3,6 +3,7 @@ package proxy
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -12,16 +13,19 @@ import (
 	"time"
 
 	"github.com/dreamware-nz/kete/internal/adapter/anthropic"
+	"github.com/dreamware-nz/kete/internal/extract"
 	"github.com/dreamware-nz/kete/internal/store"
 )
 
-// TestProxy_CaptureAndInject runs a full request through the server,
-// asserts the upstream sees the byte-exact (possibly injected) body,
-// and asserts a tasks row lands in the DB after the request.
-func TestProxy_CaptureAndInject(t *testing.T) {
+// TestProxy_CaptureInjectAndEnrich runs a full request through the
+// server, asserts:
+//  1. the upstream sees the injected body (prior task id present)
+//  2. the response streams back to the client
+//  3. a proxy-source row lands in the DB with the pre-injection trace
+//  4. the captured row is enriched (goal + decisions filled in by
+//     ExtractTask, which we route through a fake Anthropic upstream)
+func TestProxy_CaptureInjectAndEnrich(t *testing.T) {
 	dir := t.TempDir()
-	// Resolve symlinks once so KETE_PROJECT and the seeded ProjectPath
-	// match what the proxy's projectPath() will derive.
 	resolvedDir, err := filepath.EvalSymlinks(dir)
 	if err != nil {
 		t.Fatal(err)
@@ -35,7 +39,6 @@ func TestProxy_CaptureAndInject(t *testing.T) {
 	}
 	defer db.Close()
 
-	// Seed one prior task so injection has something to splice.
 	priorID := "prior-task-1"
 	if err := db.CreateTask(context.Background(), &store.Task{
 		ID:          priorID,
@@ -47,7 +50,7 @@ func TestProxy_CaptureAndInject(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Fake Anthropic upstream.
+	// Fake forwarding upstream: receives the proxied messages.
 	upstreamHits := 0
 	var upstreamSawBody []byte
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -58,18 +61,33 @@ func TestProxy_CaptureAndInject(t *testing.T) {
 	}))
 	defer upstream.Close()
 
-	// Build a Server pointed at our fake upstream.
+	// Fake Haiku: returns a fixed extraction so we can assert the
+	// enrichment landed in the DB.
+	extractHits := 0
+	extractUpstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		extractHits++
+		// Anthropic-shaped response with a single text block whose
+		// content is the JSON ExtractTask expects.
+		fmt.Fprint(w, `{"id":"x","type":"message","role":"assistant","content":[{"type":"text","text":"{\"goal\":\"answer hello\",\"decisions\":[{\"choice\":\"reply with ok\",\"rationale\":\"shortest valid response\"}],\"files_touched\":[\"none\"]}"}],"stop_reason":"end_turn","usage":{"input_tokens":1,"output_tokens":1}}`)
+	}))
+	defer extractUpstream.Close()
+
 	cfg := Config{
 		Host: "127.0.0.1", Port: 0,
 		MaxBodyBytes: defaultMaxBodyBytes, RequestTimeout: 5 * time.Second,
 	}
 	srv := NewServer(cfg, db)
-	// Override the anthropic adapter to point at the fake upstream.
 	srv.adapters[UpstreamAnthropic] = &anthropic.Adapter{
 		BaseURL: upstream.URL, HTTPClient: http.DefaultClient,
 	}
+	// Inject a stubbed extractor pointed at our fake Haiku.
+	srv.capture.SetExtractor(&extract.Client{
+		BaseURL:    extractUpstream.URL,
+		APIKey:     "sk-test",
+		Model:      "test-haiku",
+		HTTPClient: http.DefaultClient,
+	})
 
-	// Run on httptest.Server using the chi handler.
 	front := httptest.NewServer(srv.http.Handler)
 	defer front.Close()
 
@@ -87,23 +105,23 @@ func TestProxy_CaptureAndInject(t *testing.T) {
 	if upstreamHits != 1 {
 		t.Errorf("upstreamHits=%d, want 1", upstreamHits)
 	}
-	// Upstream should have seen the injected body — i.e. our prior
-	// task's id should appear in what the upstream received.
 	if !bytes.Contains(upstreamSawBody, []byte(priorID)) {
 		t.Errorf("upstream did not see injected memory:\n%s", upstreamSawBody)
 	}
 
-	// Wait briefly for the async capture to land.
 	srv.capture.Wait()
+
+	if extractHits != 1 {
+		t.Errorf("extractHits=%d, want 1 (capture must enrich)", extractHits)
+	}
+
 	tasks, err := db.ListTasks(context.Background(), resolvedDir)
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Two tasks: the prior we seeded, and the captured one.
 	if len(tasks) != 2 {
 		t.Fatalf("got %d tasks, want 2", len(tasks))
 	}
-	// The captured row is the one with source="proxy".
 	var captured *store.Task
 	for _, t := range tasks {
 		if t.Source == "proxy" {
@@ -112,14 +130,22 @@ func TestProxy_CaptureAndInject(t *testing.T) {
 		}
 	}
 	if captured == nil {
-		t.Fatalf("no proxy-captured task found among %d", len(tasks))
+		t.Fatalf("no proxy-captured task found")
 	}
 	if !strings.Contains(captured.ReasoningTrace, "hello") {
-		t.Errorf("captured trace missing original prompt: %q", captured.ReasoningTrace)
+		t.Errorf("trace missing original prompt: %q", captured.ReasoningTrace)
 	}
-	// Belt-and-braces: capture is pre-injection, so the prior id must
-	// NOT appear in the captured trace.
 	if strings.Contains(captured.ReasoningTrace, priorID) {
-		t.Errorf("captured trace contained injected memory; expected pre-inject body")
+		t.Errorf("trace contained injected memory; expected pre-inject body")
+	}
+	// Enrichment landed.
+	if captured.Goal != "answer hello" {
+		t.Errorf("captured.Goal=%q, want 'answer hello' (enrichment failed)", captured.Goal)
+	}
+	if len(captured.Decisions) != 1 || captured.Decisions[0].Choice != "reply with ok" {
+		t.Errorf("captured.Decisions=%+v, want one with choice 'reply with ok'", captured.Decisions)
+	}
+	if len(captured.FilesTouched) != 1 || captured.FilesTouched[0] != "none" {
+		t.Errorf("captured.FilesTouched=%+v", captured.FilesTouched)
 	}
 }

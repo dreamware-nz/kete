@@ -14,12 +14,16 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/dreamware-nz/kete/internal/adapter"
 	"github.com/dreamware-nz/kete/internal/adapter/anthropic"
 	"github.com/dreamware-nz/kete/internal/adapter/bedrock"
 	"github.com/dreamware-nz/kete/internal/adapter/ccproxy"
+	"github.com/dreamware-nz/kete/internal/drift"
+	"github.com/dreamware-nz/kete/internal/extract"
+	"github.com/dreamware-nz/kete/internal/keepalive"
 	"github.com/dreamware-nz/kete/internal/store"
 	"github.com/go-chi/chi/v5"
 )
@@ -31,6 +35,7 @@ type Config struct {
 	Port           int
 	MaxBodyBytes   int64
 	RequestTimeout time.Duration
+	ExtendedCache  bool
 }
 
 const (
@@ -64,11 +69,18 @@ func LoadConfig() (Config, error) {
 
 // Server holds the running HTTP server's state. One per process.
 type Server struct {
-	cfg      Config
-	store    *store.DB
-	http     *http.Server
-	adapters map[Upstream]adapter.Wire
-	capture  *capture
+	cfg       Config
+	store     *store.DB
+	http      *http.Server
+	adapters  map[Upstream]adapter.Wire
+	capture   *capture
+	driftHook *driftHook
+	driftSt   *drift.State
+	extractor *extract.Client // shared with capture; used for drift scoring
+	keepalive *keepalive.Manager
+
+	mu          sync.Mutex
+	corrections map[string]string // project -> pending correction text
 }
 
 // NewServer wires the chi router and an http.Server. It does not bind
@@ -80,8 +92,19 @@ func NewServer(cfg Config, db *store.DB) *Server {
 
 	s := &Server{
 		cfg: cfg, store: db,
-		adapters: defaultAdapters(),
-		capture:  newCapture(db),
+		adapters:    defaultAdapters(),
+		capture:     newCapture(db),
+		driftHook:   newDriftHook(),
+		driftSt:     drift.NewState(),
+		corrections: make(map[string]string),
+	}
+	// Capture builds its own extractor; reuse it for drift scoring so
+	// we don't open a second client. SetExtractor is exported for
+	// tests; the field stays unexported.
+	s.extractor = s.capture.extractor
+	if cfg.ExtendedCache {
+		s.keepalive = keepalive.NewManager()
+		s.keepalive.Start()
 	}
 	r.Get("/health", s.handleHealth)
 	r.Post("/v1/messages", s.handleMessages)
@@ -143,6 +166,9 @@ func (s *Server) shutdown() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 	defer cancel()
 	err := s.http.Shutdown(ctx)
+	if s.keepalive != nil {
+		s.keepalive.Close()
+	}
 	s.capture.Wait()
 	return err
 }
@@ -215,11 +241,99 @@ func (s *Server) handleMessages(w http.ResponseWriter, r *http.Request) {
 		injected = rawBody
 	}
 
-	if err := ad.Forward(r.Context(), injected, SanitiseHeaders(r.Header), w); err != nil {
+	// If a previous turn produced a correction, splice it ahead of
+	// memory. One correction per request; consume on inject.
+	if correction := s.consumeCorrection(project); correction != "" {
+		if b, err := injectCorrectionPayload(injected, correction); err == nil {
+			injected = b
+		}
+	}
+
+	sanitised := SanitiseHeaders(r.Header)
+	if err := ad.Forward(r.Context(), injected, sanitised, w); err != nil {
 		fmt.Fprintf(os.Stderr, "forward(%s): %v\n", up, err)
 	}
 
 	// Capture the *original* body (pre-injection) so the captured
 	// reasoning trace doesn't include kete's own injections.
 	s.capture.Record(project, "proxy", rawBody)
+
+	// Drift check every Nth request; result feeds the next request's
+	// correction queue so the hot path stays cheap-ish.
+	if s.driftHook.Tick() {
+		go s.scoreAndQueueCorrection(project, rawBody)
+	}
+
+	// Stash for keepalive if enabled. We use the project as the
+	// session id (one session per project for v1).
+	if s.keepalive != nil && up == UpstreamAnthropic {
+		s.keepalive.Stash(project, rawBody, sanitised, anthropicURLFromAdapter(ad))
+	}
+}
+
+// scoreAndQueueCorrection runs Haiku-based drift detection on the
+// captured request and, if the level warrants, builds a correction
+// and stashes it for the next request.
+func (s *Server) scoreAndQueueCorrection(project string, rawBody []byte) {
+	if s.extractor == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	// Goal lookup: most recent enriched task for this project.
+	tasks, err := s.store.ListTasks(ctx, project)
+	if err != nil || len(tasks) == 0 {
+		return
+	}
+	var goal string
+	for _, t := range tasks {
+		if t.Goal != "" {
+			goal = t.Goal
+			break
+		}
+	}
+	if goal == "" {
+		return
+	}
+	score, level, err := drift.ScoreAction(ctx, s.extractor, goal, string(rawBody))
+	if err != nil {
+		return
+	}
+	s.driftSt.Record(project, level)
+	// Persist regardless of level; goal selection above already gave us
+	// a task id but we'll just attach to the latest captured task.
+	latest := tasks[0].ID
+	correction := ""
+	if level != drift.LevelNone {
+		correction, _ = drift.BuildCorrection(ctx, s.extractor, goal, string(rawBody), level)
+	}
+	_ = drift.Persist(ctx, s.store, latest, score, level, correction)
+	if correction != "" {
+		s.queueCorrection(project, correction)
+	}
+}
+
+func (s *Server) queueCorrection(project, text string) {
+	s.mu.Lock()
+	s.corrections[project] = text
+	s.mu.Unlock()
+}
+
+func (s *Server) consumeCorrection(project string) string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	text := s.corrections[project]
+	delete(s.corrections, project)
+	return text
+}
+
+// anthropicURLFromAdapter pulls the BaseURL out of the anthropic
+// adapter so the keepalive manager has a real URL to dial. Falls
+// back to the public endpoint.
+func anthropicURLFromAdapter(ad adapter.Wire) string {
+	if a, ok := ad.(*anthropic.Adapter); ok && a.BaseURL != "" {
+		return a.BaseURL + "/v1/messages"
+	}
+	return anthropic.DefaultBaseURL + "/v1/messages"
 }

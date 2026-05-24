@@ -27,6 +27,7 @@ func newProxyCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			cfg.ExtendedCache = extendedCache
 			return withStore(func(db *store.DB) error {
 				srv := proxy.NewServer(cfg, db)
 				ctx, stop := signal.NotifyContext(context.Background(),

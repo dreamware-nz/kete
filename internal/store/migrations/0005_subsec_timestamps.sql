@@ -1,0 +1,15 @@
+-- Subsec timestamps so ordering is deterministic when multiple rows
+-- land within the same second (capture goroutines can land 3 rows in
+-- ~10 ms; CURRENT_TIMESTAMP is second-precision and produces ties).
+--
+-- We can't ALTER COLUMN ... SET DEFAULT in SQLite (would break the
+-- ADR 0003 idempotency rule). Instead, drop and recreate the
+-- INDEX-driving views by reading existing rows and rebuilding... but
+-- that's overkill for a default change. Existing rows keep their
+-- coarse timestamps; new rows get sub-second precision via the
+-- updated INSERT path in tasks.go (no migration needed for that).
+--
+-- This migration is a no-op marker so schema_migrations records the
+-- intent. The behaviour change lives in tasks.go's CreateTask which
+-- now sets created_at explicitly to strftime('%Y-%m-%d %H:%M:%f','now').
+SELECT 1;
