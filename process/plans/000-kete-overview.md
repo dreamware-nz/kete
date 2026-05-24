@@ -1,7 +1,7 @@
 ---
 id: 000-kete-overview
 date: 2026-05-24
-status: draft
+status: active
 brief: 000-kete-overview
 design: null
 adrs: [0000-project-identity-and-name, 0001-go-1-22-single-binary, 0002-sqlite-via-modernc-no-cgo, 0015-three-upstreams-selection]
