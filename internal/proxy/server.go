@@ -66,6 +66,7 @@ type Server struct {
 	store    *store.DB
 	http     *http.Server
 	adapters map[Upstream]adapter.Wire
+	capture  *capture
 }
 
 // NewServer wires the chi router and an http.Server. It does not bind
@@ -75,7 +76,11 @@ func NewServer(cfg Config, db *store.DB) *Server {
 	r.Use(timeoutMiddleware(cfg.RequestTimeout))
 	r.Use(maxBodyMiddleware(cfg.MaxBodyBytes))
 
-	s := &Server{cfg: cfg, store: db, adapters: defaultAdapters()}
+	s := &Server{
+		cfg: cfg, store: db,
+		adapters: defaultAdapters(),
+		capture:  newCapture(db),
+	}
 	r.Get("/health", s.handleHealth)
 	r.Post("/v1/messages", s.handleMessages)
 	r.NotFound(s.handleNotFound)
@@ -135,7 +140,9 @@ func (s *Server) Run(ctx context.Context) error {
 func (s *Server) shutdown() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 	defer cancel()
-	return s.http.Shutdown(ctx)
+	err := s.http.Shutdown(ctx)
+	s.capture.Wait()
+	return err
 }
 
 // Addr returns the bound address (host:port). Useful for tests.
@@ -188,8 +195,22 @@ func (s *Server) handleMessages(w http.ResponseWriter, r *http.Request) {
 			http.StatusNotImplemented)
 		return
 	}
-	if err := ad.Forward(r.Context(), rawBody, SanitiseHeaders(r.Header), w); err != nil {
-		// Headers may already be flushed; surface via log only.
+
+	project := projectPath()
+
+	// Inject prior memory before forwarding. Failure is non-fatal:
+	// brief 002 says enrichment never blocks forwarding.
+	injected, err := injectMemory(r.Context(), s.store, project, rawBody)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "inject(%s): %v\n", project, err)
+		injected = rawBody
+	}
+
+	if err := ad.Forward(r.Context(), injected, SanitiseHeaders(r.Header), w); err != nil {
 		fmt.Fprintf(os.Stderr, "forward(%s): %v\n", up, err)
 	}
+
+	// Capture the *original* body (pre-injection) so the captured
+	// reasoning trace doesn't include kete's own injections.
+	s.capture.Record(project, "proxy", rawBody)
 }

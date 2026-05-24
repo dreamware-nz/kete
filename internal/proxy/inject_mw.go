@@ -1,0 +1,83 @@
+package proxy
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+
+	"github.com/dreamware-nz/kete/internal/inject"
+	"github.com/dreamware-nz/kete/internal/store"
+)
+
+// injectMemory splices up to 3 prior tasks for project into rawBody.
+// Ranking is "newest first" — real ranking lands in plan 010.
+//
+// If the body has a cache_control marker, we splice before it (so the
+// cache prefix stays intact); otherwise we append to the messages
+// array. If there are no prior tasks, the body is returned unchanged.
+func injectMemory(ctx context.Context, db *store.DB, project string, rawBody []byte) ([]byte, error) {
+	if db == nil || project == "" {
+		return rawBody, nil
+	}
+	tasks, err := db.ListTasks(ctx, project)
+	if err != nil {
+		return rawBody, fmt.Errorf("inject: list tasks: %w", err)
+	}
+	if len(tasks) == 0 {
+		return rawBody, nil
+	}
+	if len(tasks) > 3 {
+		tasks = tasks[:3]
+	}
+	payload, err := buildMemoryPayload(tasks)
+	if err != nil {
+		return rawBody, err
+	}
+	if out, err := inject.BeforeCacheBreakpoint(rawBody, payload); err == nil {
+		return out, nil
+	}
+	return inject.AtMessages(rawBody, payload)
+}
+
+// buildMemoryPayload renders prior tasks as one user message containing
+// kete-flavoured XML so the model can recognise the segment without
+// us needing to parse it back out.
+func buildMemoryPayload(tasks []*store.Task) ([]byte, error) {
+	var content string
+	for _, t := range tasks {
+		content += "<kete:memory id=" + escapeJSON(t.ID) + ">"
+		content += "<goal>" + escapeXML(t.Goal) + "</goal>"
+		for _, d := range t.Decisions {
+			content += "<decision choice=" + escapeJSON(d.Choice) +
+				" rationale=" + escapeJSON(d.Rationale) + "/>"
+		}
+		content += "</kete:memory>"
+	}
+	msg := map[string]any{
+		"role":    "user",
+		"content": content,
+	}
+	return json.Marshal(msg)
+}
+
+func escapeJSON(s string) string {
+	b, _ := json.Marshal(s)
+	return string(b)
+}
+
+func escapeXML(s string) string {
+	out := make([]byte, 0, len(s))
+	for _, r := range s {
+		switch r {
+		case '<':
+			out = append(out, []byte("&lt;")...)
+		case '>':
+			out = append(out, []byte("&gt;")...)
+		case '&':
+			out = append(out, []byte("&amp;")...)
+		default:
+			out = append(out, []byte(string(r))...)
+		}
+	}
+	return string(out)
+}
