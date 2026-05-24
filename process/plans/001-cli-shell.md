@@ -22,6 +22,7 @@ A `kete` cobra binary with the v1 subcommand surface, a single error path that a
 - **Context:** ADR 0010.
 - **Depends-on:** `[]`
 - **Done when:** `kete badcmd` prints `Error: …`, exits 1.
+- **Status:** done 2026-05-24 at 88168f6 — L1 ok, build ok.
 
 ### Phase 2 — `--version` from ldflags
 
