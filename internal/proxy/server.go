@@ -18,6 +18,8 @@ import (
 
 	"github.com/dreamware-nz/kete/internal/adapter"
 	"github.com/dreamware-nz/kete/internal/adapter/anthropic"
+	"github.com/dreamware-nz/kete/internal/adapter/bedrock"
+	"github.com/dreamware-nz/kete/internal/adapter/ccproxy"
 	"github.com/dreamware-nz/kete/internal/store"
 	"github.com/go-chi/chi/v5"
 )
@@ -161,13 +163,20 @@ func (s *Server) handleNotFound(w http.ResponseWriter, _ *http.Request) {
 	_, _ = w.Write([]byte(`{"error":"Not found"}`))
 }
 
-// defaultAdapters wires the three upstreams. cc-proxy and Bedrock land
-// in plans 013 and 012; for now those two slots are nil and selecting
-// them returns 501 from handleMessages.
+// defaultAdapters wires the three upstreams. Adapters that fail to
+// configure (no AWS region, no cc-proxy key) are left nil; selecting
+// them returns 501 from handleMessages so the user sees a clear error.
 func defaultAdapters() map[Upstream]adapter.Wire {
-	return map[Upstream]adapter.Wire{
+	out := map[Upstream]adapter.Wire{
 		UpstreamAnthropic: anthropic.New(),
 	}
+	if a, err := bedrock.New(context.Background()); err == nil {
+		out[UpstreamBedrock] = a
+	}
+	if a, err := ccproxy.New(); err == nil {
+		out[UpstreamCCProxy] = a
+	}
+	return out
 }
 
 // handleMessages routes a /v1/messages request through the upstream
