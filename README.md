@@ -127,6 +127,7 @@ The docs follow [Diátaxis](https://diataxis.fr):
 - **Tutorial** — [first-run](docs/tutorials/first-run.md)
 - **How-to** — [bedrock](docs/how-to/use-bedrock.md) ·
   [cc-proxy](docs/how-to/use-cc-proxy.md) ·
+  [run as a service](docs/how-to/run-as-a-service.md) ·
   [inspect memory](docs/how-to/inspect-memory.md) ·
   [extended cache](docs/how-to/enable-extended-cache.md)
 - **Reference** — [CLI](docs/reference/cli.md) ·
