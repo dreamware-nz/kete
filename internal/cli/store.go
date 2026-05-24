@@ -1,4 +1,4 @@
-package main
+package cli
 
 import (
 	"github.com/dreamware-nz/kete/internal/store"
