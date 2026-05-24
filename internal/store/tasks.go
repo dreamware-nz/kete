@@ -52,8 +52,11 @@ func (d *DB) CreateTask(ctx context.Context, t *Task) error {
 	_, err = d.ExecContext(ctx, `
 		INSERT INTO tasks (
 			id, project_path, user_id, system_name, goal,
-			decisions, files_touched, reasoning_trace, source
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			decisions, files_touched, reasoning_trace, source,
+			created_at, updated_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?,
+			strftime('%Y-%m-%d %H:%M:%f','now'),
+			strftime('%Y-%m-%d %H:%M:%f','now'))`,
 		t.ID, t.ProjectPath, nullStr(t.UserID), nullStr(t.SystemName),
 		nullStr(t.Goal), string(decs), string(files),
 		nullStr(t.ReasoningTrace), t.Source,
@@ -191,10 +194,14 @@ func collectTasks(rows *sql.Rows) ([]*Task, error) {
 }
 
 func parseSQLiteTime(s string) time.Time {
-	// SQLite CURRENT_TIMESTAMP format: "2006-01-02 15:04:05".
 	if s == "" {
 		return time.Time{}
 	}
+	// strftime('%Y-%m-%d %H:%M:%f','now') → 2006-01-02 15:04:05.000
+	if t, err := time.Parse("2006-01-02 15:04:05.000", s); err == nil {
+		return t
+	}
+	// CURRENT_TIMESTAMP fallback (older rows pre-migration 0005).
 	if t, err := time.Parse("2006-01-02 15:04:05", s); err == nil {
 		return t
 	}

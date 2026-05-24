@@ -104,7 +104,12 @@ func (m *Manager) loop() {
 }
 
 func (m *Manager) tick() {
-	now := time.Now()
+	m.tickAt(time.Now())
+}
+
+// tickAt is the testable seam — drives the same logic but with a
+// caller-supplied time so tests don't have to wait 4 minutes.
+func (m *Manager) tickAt(now time.Time) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	for id, s := range m.sessions {

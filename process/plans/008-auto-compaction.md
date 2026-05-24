@@ -1,13 +1,22 @@
 ---
 id: 008-auto-compaction
 date: 2026-05-24
-status: done
+status: active
 brief: 008-auto-compaction
 design: null
 adrs: []
 ---
 
 # 008 — Auto-compaction
+
+> **Status note (2026-05-24):** parts shipped, plan rolled back to
+> active because the streaming response-side token-usage tap is not
+> yet implemented. Without it the compaction trigger never fires in
+> a real session. `compact.Compute`, `Cache`, and `Apply` are all
+> wired and tested in isolation. Remaining work: SSE event-stream
+> tap that reads `delta.usage` from `event: message_delta` frames as
+> they pass through the proxy, accumulates, and calls
+> `compactHook.Observe`. Once that's in, set status: done.
 
 ## Goal
 

@@ -2,29 +2,49 @@ package proxy
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"os"
 	"sync"
+	"time"
 
+	"github.com/dreamware-nz/kete/internal/extract"
 	"github.com/dreamware-nz/kete/internal/store"
 	"github.com/google/uuid"
 )
 
-// captureRaw asynchronously writes a raw `tasks` row after a request
-// has finished. Extraction (plan 011) fills in goal/decisions later;
-// for now we just capture the raw bytes so we never lose them.
+// capture asynchronously writes a raw `tasks` row after a request
+// has finished, then (if an extractor is configured) enriches the row
+// with goal / decisions / files_touched via Haiku.
 //
 // Errors are logged-and-swallowed. Capture must never block or break
 // the proxy hot path.
 type capture struct {
-	store *store.DB
-	wg    sync.WaitGroup
+	store     *store.DB
+	extractor *extract.Client // optional; nil means "raw only"
+	wg        sync.WaitGroup
 }
 
+// newCapture builds a capture that always writes raw rows. It tries
+// to construct an extractor; if ANTHROPIC_API_KEY is missing, the
+// extractor stays nil and rows ship raw — the proxy still works,
+// just without enrichment.
 func newCapture(db *store.DB) *capture {
-	return &capture{store: db}
+	c := &capture{store: db}
+	if ex, err := extract.NewClient(); err == nil {
+		c.extractor = ex
+	}
+	return c
 }
 
-// Record schedules a raw write. Safe to call from a request handler.
-// rawBody is copied; the caller can reuse the slice immediately.
+// SetExtractor replaces the extractor (used in tests to inject a
+// stubbed Anthropic endpoint). nil disables enrichment.
+func (c *capture) SetExtractor(ex *extract.Client) {
+	c.extractor = ex
+}
+
+// Record schedules a raw write, then an enrichment pass. Safe to
+// call from a request handler. rawBody is copied.
 func (c *capture) Record(project, source string, rawBody []byte) {
 	if c.store == nil || project == "" {
 		return
@@ -34,14 +54,50 @@ func (c *capture) Record(project, source string, rawBody []byte) {
 	c.wg.Add(1)
 	go func() {
 		defer c.wg.Done()
+		id := uuid.NewString()
 		t := &store.Task{
-			ID:             uuid.NewString(),
+			ID:             id,
 			ProjectPath:    project,
 			Source:         source,
 			ReasoningTrace: string(body),
 		}
-		_ = c.store.CreateTask(context.Background(), t)
+		if err := c.store.CreateTask(context.Background(), t); err != nil {
+			fmt.Fprintf(os.Stderr, "capture: create %s: %v\n", id, err)
+			return
+		}
+		c.enrich(id, body)
 	}()
+}
+
+// enrich runs ExtractTask against the captured body and updates the
+// row in place. Failure is logged and swallowed — the raw row stays.
+//
+// Bounded to 60 s so a slow Haiku doesn't pin a goroutine forever
+// during shutdown.
+func (c *capture) enrich(taskID string, body []byte) {
+	if c.extractor == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	out, err := c.extractor.ExtractTask(ctx, string(body))
+	if err != nil {
+		// Network errors / non-JSON responses both land here. Don't
+		// noise the log under context cancellation (shutdown).
+		if !errors.Is(err, context.Canceled) {
+			fmt.Fprintf(os.Stderr, "capture: enrich %s: %v\n", taskID, err)
+		}
+		return
+	}
+	// Map extract.Decision -> store.Decision (same shape, different
+	// package).
+	decs := make([]store.Decision, len(out.Decisions))
+	for i, d := range out.Decisions {
+		decs[i] = store.Decision{Choice: d.Choice, Rationale: d.Rationale}
+	}
+	if err := c.store.UpdateTask(ctx, taskID, out.Goal, decs, out.FilesTouched, string(body)); err != nil {
+		fmt.Fprintf(os.Stderr, "capture: update %s: %v\n", taskID, err)
+	}
 }
 
 // Wait blocks until in-flight captures finish. Used by the server's

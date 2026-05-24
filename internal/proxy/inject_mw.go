@@ -65,6 +65,24 @@ func escapeJSON(s string) string {
 	return string(b)
 }
 
+// injectCorrectionPayload splices a kete-flavoured correction message
+// into the request body. Same scheme as memory injection: prefer the
+// cache-breakpoint splice; fall back to messages-array tail.
+func injectCorrectionPayload(rawBody []byte, correction string) ([]byte, error) {
+	msg := map[string]any{
+		"role":    "user",
+		"content": "<kete:correction>" + escapeXML(correction) + "</kete:correction>",
+	}
+	payload, err := json.Marshal(msg)
+	if err != nil {
+		return rawBody, err
+	}
+	if out, err := inject.BeforeCacheBreakpoint(rawBody, payload); err == nil {
+		return out, nil
+	}
+	return inject.AtMessages(rawBody, payload)
+}
+
 func escapeXML(s string) string {
 	out := make([]byte, 0, len(s))
 	for _, r := range s {

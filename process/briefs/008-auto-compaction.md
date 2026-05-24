@@ -1,7 +1,7 @@
 ---
 id: 008-auto-compaction
 date: 2026-05-24
-status: shipped
+status: accepted
 from-idea: 2026-05-24-kete
 design: null
 adrs: []

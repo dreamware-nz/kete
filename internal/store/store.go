@@ -27,6 +27,13 @@ func Open(path string) (*DB, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open %s: %w", path, err)
 	}
+	// SQLite serialises writes through a single writer lock; with
+	// WAL on, readers can proceed concurrently with the one active
+	// writer. database/sql's default pool of N connections triggers
+	// SQLITE_BUSY when two of them try to write concurrently. Pin to
+	// one connection so the proxy's many goroutines (capture +
+	// enrich + drift Persist) line up cleanly.
+	sqldb.SetMaxOpenConns(1)
 	if err := applyPragmas(sqldb); err != nil {
 		sqldb.Close()
 		return nil, err
