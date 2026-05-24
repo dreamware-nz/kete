@@ -68,6 +68,9 @@ type Server struct {
 // until Run is called.
 func NewServer(cfg Config, db *store.DB) *Server {
 	r := chi.NewRouter()
+	r.Use(timeoutMiddleware(cfg.RequestTimeout))
+	r.Use(maxBodyMiddleware(cfg.MaxBodyBytes))
+
 	s := &Server{cfg: cfg, store: db}
 	r.Get("/health", s.handleHealth)
 	r.NotFound(s.handleNotFound)
@@ -78,6 +81,31 @@ func NewServer(cfg Config, db *store.DB) *Server {
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 	return s
+}
+
+// timeoutMiddleware applies a per-request context timeout. Bodies that
+// take longer than d to forward will see ctx.Err() == DeadlineExceeded.
+func timeoutMiddleware(d time.Duration) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			ctx, cancel := context.WithTimeout(r.Context(), d)
+			defer cancel()
+			next.ServeHTTP(w, r.WithContext(ctx))
+		})
+	}
+}
+
+// maxBodyMiddleware caps request bodies. Reads past the cap return 413.
+// We deliberately wrap r.Body rather than buffering up-front so the
+// passthrough forwarder (phase 5) can stream and still get a 413 on
+// overflow without holding the whole body in RAM.
+func maxBodyMiddleware(max int64) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			r.Body = http.MaxBytesReader(w, r.Body, max)
+			next.ServeHTTP(w, r)
+		})
+	}
 }
 
 // Run starts the listener and blocks until ctx is cancelled or
