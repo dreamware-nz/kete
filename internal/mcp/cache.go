@@ -1,10 +1,9 @@
 package mcp
 
 import (
-	"crypto/sha1"
-	"encoding/hex"
 	"sync"
 
+	"github.com/dreamware-nz/kete/internal/inject"
 	"github.com/dreamware-nz/kete/internal/store"
 )
 
@@ -12,22 +11,23 @@ import (
 // is a single MCP server process — by the time the user starts a new
 // kete mcp, fresh ids will be issued.
 //
-// The 8-char id is derived from sha1(task.id) so the same task gets
-// the same display id across previews within a session, which makes
-// the wire surface stable for the model.
+// The 8-char id is derived from sha1(task.id) (see inject.ShortID),
+// so any process — proxy or MCP — computes the same id for the same
+// task. That's how a memory the proxy injects in one process can be
+// expanded by an MCP server in a different process.
 type previewCache struct {
-	mu    sync.RWMutex
-	byID  map[string]string // 8-char display id -> store task id
+	mu   sync.RWMutex
+	byID map[string]string // 8-char display id -> store task id
 }
 
 func newPreviewCache() *previewCache {
 	return &previewCache{byID: make(map[string]string)}
 }
 
-// shortID is the deterministic 8-char display id for a task.
+// shortID is the package-private alias kept for backwards-compat
+// inside this package; new callers should use inject.ShortID.
 func shortID(taskID string) string {
-	sum := sha1.Sum([]byte(taskID))
-	return hex.EncodeToString(sum[:])[:8]
+	return inject.ShortID(taskID)
 }
 
 // register records the display→real mapping and returns the display id.

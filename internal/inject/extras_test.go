@@ -70,8 +70,9 @@ func TestPreview_Format(t *testing.T) {
 		CreatedAt:    time.Date(2026, 5, 24, 12, 0, 0, 0, time.UTC),
 	}
 	out := Preview(t1)
+	wantID := ShortID(t1.ID) // 8-char SHA1 prefix; same as MCP server uses.
 	checks := []string{
-		`<kete:memory id="abc" created="2026-05-24">`,
+		`<kete:memory id="` + wantID + `" created="2026-05-24">`,
 		`<goal>do the thing</goal>`,
 		`<decision choice="X" rationale="Y"/>`,
 		`<files>a.go, b.go</files>`,

@@ -76,30 +76,23 @@ jumped 22 → 101, confirming splice).
   test environment; that path is identical to cc-proxy at the wire
   level (cc-proxy's adapter literally reuses anthropic.Adapter).
   The Bedrock live verification covers the equivalent code paths
-  (capture, inject, drift, compaction triggers) — only the
-  upstream adapter is unique.
-- **Drift fixture set deferred.** Plan 007 ships the scoring and
-  correction loop; calibration of threshold accuracy against a
-  hand-labelled set needs a real Haiku endpoint and judgement calls.
-  Drift on the live system needs `ANTHROPIC_API_KEY` because the
-  extractor goes Anthropic-direct (ADR 0009). A Bedrock-only
-  environment can't run extraction without a separate Anthropic key
-  — this is by design per ADR 0009.
-- **MCP cache not shared with proxy injection.** Plan 010 phase 6 —
-  the proxy's inline `buildMemoryPayload` and MCP's preview cache
-  are separate paths today. Both work; sharing them is mechanical.
+  (capture, inject, drift, compaction triggers, expand loop) — only
+  the upstream adapter is unique.
+- **Drift fixture calibration.** 24 hand-labelled fixtures ship in
+  `testdata/drift/fixtures.json` plus the `kete drift-test --fixture`
+  runner. A live run against Haiku 4.5 via Bedrock returned 7/24
+  exact-band matches — the model is consistently harsher than the
+  fixture labels (it reads "tangent" as halt, not nudge). The
+  loader, runner, and end-to-end wiring all work; **prompt or
+  threshold tuning to lift the match rate is its own brief.**
 - **Capture pipeline collapsed to a single source ("proxy").** Brief
   006's five-source vision (proxy + Cursor/Zed/Codex/Antigravity
   scanners) deferred until a non-Crush user appears. Documented in
   `internal/capture/capture.go` and `process/drift.md`.
 - **ADR 0007 `Semantics` interface** has no implementation — only
-  `Wire` ships in 0.1.0 because nothing else in v1 needs the typed
-  view (extraction operates on raw JSON bytes). Lands when the
-  orchestrator that runs the kete_expand tool loop in the proxy
-  arrives.
-- **Expand-loop guard** (`expand_loop.go`) exists but has no caller
-  yet — the proxy doesn't run the kete_expand tool loop in v1; the
-  guard is wired when that orchestrator lands.
+  `Wire` ships because nothing in v1 needs the typed view (extraction
+  operates on raw JSON bytes; the expand-loop orchestrator parses
+  JSON inline). Lands when a second caller demands it.
 
 ### Tooling
 

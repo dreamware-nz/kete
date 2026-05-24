@@ -15,6 +15,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 )
 
@@ -33,21 +34,23 @@ type Client struct {
 	HTTPClient *http.Client
 }
 
-// NewClient resolves config from env. Returns an error rather than
-// papering over a missing key — callers must decide whether extraction
-// is required for their flow (capture is fine without; drift is not).
+// NewClient resolves config from env. ANTHROPIC_API_KEY is required
+// when going against api.anthropic.com directly. When the user
+// points KETE_ANTHROPIC_URL at a local proxy or another relay, the
+// key may be empty — auth is the proxy's problem.
 func NewClient() (*Client, error) {
 	key := os.Getenv("ANTHROPIC_API_KEY")
-	if key == "" {
-		return nil, errors.New("extract: ANTHROPIC_API_KEY not set")
+	url := defaultBaseURL
+	if v := os.Getenv("KETE_ANTHROPIC_URL"); v != "" {
+		url = v
+	}
+	// Only the public endpoint demands a real key from us.
+	if key == "" && url == defaultBaseURL {
+		return nil, errors.New("extract: ANTHROPIC_API_KEY not set (required when KETE_ANTHROPIC_URL is unset)")
 	}
 	model := defaultModel
 	if v := os.Getenv("KETE_DRIFT_MODEL"); v != "" {
 		model = v
-	}
-	url := defaultBaseURL
-	if v := os.Getenv("KETE_ANTHROPIC_URL"); v != "" {
-		url = v
 	}
 	return &Client{
 		BaseURL:    url,
@@ -98,6 +101,11 @@ type Usage struct {
 
 // Text returns the concatenation of all text content blocks. Most
 // extraction calls produce one block; we concatenate defensively.
+//
+// JSON-only callers (ExtractTask, ExtractDecisions, drift.Score etc.)
+// should call ExtractJSON instead, which strips ```json ... ``` and
+// trailing prose so structured outputs parse even when the model
+// ignores the "no markdown" instruction.
 func (r *Response) Text() string {
 	var b bytes.Buffer
 	for _, c := range r.Content {
@@ -106,6 +114,64 @@ func (r *Response) Text() string {
 		}
 	}
 	return b.String()
+}
+
+// ExtractJSON returns the model's text content with markdown fences
+// stripped. Recognises ```json ... ```, ``` ... ```, and bare JSON;
+// also tolerates a trailing English explanation by extracting the
+// outermost {...} balanced span.
+func (r *Response) ExtractJSON() string {
+	s := strings.TrimSpace(r.Text())
+	// Strip an optional fenced block.
+	if strings.HasPrefix(s, "```") {
+		// Drop the opening fence (and any language tag like ```json).
+		if nl := strings.Index(s, "\n"); nl > 0 {
+			s = s[nl+1:]
+		}
+		// Drop a trailing fence.
+		if i := strings.LastIndex(s, "```"); i >= 0 {
+			s = s[:i]
+		}
+		s = strings.TrimSpace(s)
+	}
+	// Defensive: trim to the first balanced { ... }. Caller may have
+	// asked for an array, but extraction always returns objects.
+	if i := strings.Index(s, "{"); i >= 0 {
+		if j := matchingBrace(s, i); j > 0 {
+			return s[i : j+1]
+		}
+	}
+	return s
+}
+
+// matchingBrace returns the offset of the } that closes the { at
+// open. -1 if unbalanced. String-aware (skips braces inside JSON
+// string literals, including escaped quotes).
+func matchingBrace(s string, open int) int {
+	depth := 0
+	inStr := false
+	esc := false
+	for i := open; i < len(s); i++ {
+		c := s[i]
+		switch {
+		case esc:
+			esc = false
+		case c == '\\' && inStr:
+			esc = true
+		case c == '"':
+			inStr = !inStr
+		case inStr:
+			// nothing
+		case c == '{':
+			depth++
+		case c == '}':
+			depth--
+			if depth == 0 {
+				return i
+			}
+		}
+	}
+	return -1
 }
 
 // Send POSTs req to /v1/messages and parses the response. Caller owns

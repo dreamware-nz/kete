@@ -14,6 +14,7 @@ import (
 
 	"github.com/dreamware-nz/kete/internal/adapter/anthropic"
 	"github.com/dreamware-nz/kete/internal/extract"
+	"github.com/dreamware-nz/kete/internal/inject"
 	"github.com/dreamware-nz/kete/internal/store"
 )
 
@@ -105,8 +106,12 @@ func TestProxy_CaptureInjectAndEnrich(t *testing.T) {
 	if upstreamHits != 1 {
 		t.Errorf("upstreamHits=%d, want 1", upstreamHits)
 	}
-	if !bytes.Contains(upstreamSawBody, []byte(priorID)) {
-		t.Errorf("upstream did not see injected memory:\n%s", upstreamSawBody)
+	// The injected memory carries the 8-char ShortID (so MCP can
+	// resolve it via kete_expand cross-process), not the full UUID.
+	wantInjected := inject.ShortID(priorID)
+	if !bytes.Contains(upstreamSawBody, []byte(wantInjected)) {
+		t.Errorf("upstream did not see injected memory (looking for short id %q):\n%s",
+			wantInjected, upstreamSawBody)
 	}
 
 	srv.capture.Wait()

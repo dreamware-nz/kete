@@ -128,6 +128,34 @@ func (d *DB) ListAllTasks(ctx context.Context) ([]*Task, error) {
 	return collectTasks(rows)
 }
 
+// FindByShortID scans recent tasks and returns the one whose
+// shortIDFn(id) matches displayID. Used by the MCP server to resolve
+// a kete_expand request when its in-memory cache hasn't seen the id
+// yet (i.e. the proxy injected it from a different process).
+//
+// O(N) over recent tasks; fine for v1 (dozens at most). When N grows,
+// add a column.
+//
+// shortIDFn lives outside the store package (it's in inject.ShortID).
+// Passing the function in keeps the store free of inject's dep.
+func (d *DB) FindByShortID(ctx context.Context, shortIDFn func(string) string, displayID string) (*Task, error) {
+	rows, err := d.QueryContext(ctx, taskSelectFields+` FROM tasks ORDER BY created_at DESC LIMIT 500`)
+	if err != nil {
+		return nil, fmt.Errorf("find by short id: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		t, err := scanTask(rows)
+		if err != nil {
+			return nil, err
+		}
+		if shortIDFn(t.ID) == displayID {
+			return t, nil
+		}
+	}
+	return nil, ErrNotFound
+}
+
 // SearchTasks does a LIKE search over goal + reasoning_trace.
 // FTS5 deferred (plan 004 Out of scope).
 func (d *DB) SearchTasks(ctx context.Context, query string) ([]*Task, error) {

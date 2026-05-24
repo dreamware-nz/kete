@@ -41,7 +41,7 @@ func Compute(ctx context.Context, c *extract.Client, conversation string) (*Summ
 	var wrapper struct {
 		Summary Summary `json:"summary"`
 	}
-	if err := json.Unmarshal([]byte(resp.Text()), &wrapper); err != nil {
+	if err := json.Unmarshal([]byte(resp.ExtractJSON()), &wrapper); err != nil {
 		return nil, fmt.Errorf("compact summary: model returned non-JSON: %w (text: %s)", err, resp.Text())
 	}
 	return &wrapper.Summary, nil

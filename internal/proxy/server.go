@@ -273,8 +273,27 @@ func (s *Server) handleMessages(w http.ResponseWriter, r *http.Request) {
 	defer tap.Done()
 
 	sanitised := SanitiseHeaders(r.Header)
-	if err := ad.Forward(r.Context(), injected, sanitised, tap); err != nil {
-		fmt.Fprintf(os.Stderr, "forward(%s): %v\n", up, err)
+
+	// Streaming requests pass straight through. Crush handles
+	// kete_expand client-side via the stdio MCP server. The
+	// expand-loop orchestrator runs only for non-streaming requests
+	// (plan 002 phase 16; brief 002 5-cycle cap).
+	if streamingRequest(injected) {
+		if err := ad.Forward(r.Context(), injected, sanitised, tap); err != nil {
+			fmt.Fprintf(os.Stderr, "forward(%s): %v\n", up, err)
+		}
+	} else {
+		status, respHdr, respBody, err := s.runExpandLoop(r.Context(), ad, sanitised, injected)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "expand-loop(%s): %v\n", up, err)
+			http.Error(w, err.Error(), http.StatusBadGateway)
+		} else {
+			for k, vs := range respHdr {
+				tap.Header()[k] = vs
+			}
+			tap.WriteHeader(status)
+			_, _ = tap.Write(respBody)
+		}
 	}
 
 	// Capture the *original* body (pre-injection) so the captured
