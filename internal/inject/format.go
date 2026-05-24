@@ -8,12 +8,14 @@ import (
 )
 
 // Preview renders one prior task as a short text block suitable for
-// splicing into a request body's user content. Stable shape so the
-// model sees the same structure across calls.
+// splicing into a request body's user content. The "id" attribute is
+// the 8-char ShortID — the same id the MCP server resolves via
+// kete_expand. Same shape proxy and MCP both use, so no second
+// implementation drifts.
 func Preview(t *store.Task) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "<kete:memory id=%q created=%q>\n",
-		t.ID, t.CreatedAt.UTC().Format("2006-01-02"))
+		ShortID(t.ID), t.CreatedAt.UTC().Format("2006-01-02"))
 	if t.Goal != "" {
 		fmt.Fprintf(&b, "  <goal>%s</goal>\n", escapeXML(t.Goal))
 	}

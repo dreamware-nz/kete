@@ -36,7 +36,7 @@ func (c *Client) ExtractTask(ctx context.Context, conversation string) (*TaskExt
 		return nil, err
 	}
 	var out TaskExtraction
-	if err := json.Unmarshal([]byte(resp.Text()), &out); err != nil {
+	if err := json.Unmarshal([]byte(resp.ExtractJSON()), &out); err != nil {
 		return nil, fmt.Errorf("ExtractTask: model returned non-JSON: %w (text: %s)", err, resp.Text())
 	}
 	return &out, nil

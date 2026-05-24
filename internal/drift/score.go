@@ -32,7 +32,7 @@ func ScoreAction(ctx context.Context, c *extract.Client, goal, action string) (*
 		return nil, LevelNone, err
 	}
 	var s Score
-	if err := json.Unmarshal([]byte(resp.Text()), &s); err != nil {
+	if err := json.Unmarshal([]byte(resp.ExtractJSON()), &s); err != nil {
 		return nil, LevelNone, fmt.Errorf("drift score: model returned non-JSON: %w (text: %s)", err, resp.Text())
 	}
 	return &s, LevelFromScore(s.Score), nil
@@ -58,7 +58,7 @@ func BuildCorrection(ctx context.Context, c *extract.Client, goal, action string
 	var out struct {
 		Correction string `json:"correction"`
 	}
-	if err := json.Unmarshal([]byte(resp.Text()), &out); err != nil {
+	if err := json.Unmarshal([]byte(resp.ExtractJSON()), &out); err != nil {
 		return "", fmt.Errorf("drift correct: model returned non-JSON: %w (text: %s)", err, resp.Text())
 	}
 	return out.Correction, nil

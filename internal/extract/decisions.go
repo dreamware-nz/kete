@@ -27,7 +27,7 @@ func (c *Client) ExtractDecisions(ctx context.Context, conversation string) (*De
 		return nil, err
 	}
 	var out DecisionsExtraction
-	if err := json.Unmarshal([]byte(resp.Text()), &out); err != nil {
+	if err := json.Unmarshal([]byte(resp.ExtractJSON()), &out); err != nil {
 		return nil, fmt.Errorf("ExtractDecisions: model returned non-JSON: %w (text: %s)", err, resp.Text())
 	}
 	return &out, nil
