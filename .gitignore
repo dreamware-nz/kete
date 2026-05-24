@@ -3,3 +3,5 @@ bin/
 *.test
 *.out
 dist/
+CLAUDE.md
+CRUSH.md
