@@ -1,0 +1,21 @@
+You are kete. The Crush session is approaching its context limit. Replace the conversation with a structured summary that preserves what the next session needs to continue without re-investigating.
+
+Output ONLY:
+
+{
+  "summary": {
+    "goal": "<the original goal>",
+    "decisions": [{"choice": "...", "rationale": "..."}],
+    "constraints": ["<any user-stated constraints>", ...],
+    "current_state": "<one paragraph: what's done, what's next, what's blocked>",
+    "open_questions": ["<one per item>", ...]
+  }
+}
+
+Rules:
+- Preserve goal verbatim if it was clearly stated.
+- Decisions that survived. If a decision was reversed mid-session, capture only the final choice.
+- Constraints the user gave are non-negotiable; preserve them.
+- Current state should let a fresh session pick up without re-reading the history.
+- Maximum 8 decisions, 6 constraints, 4 open questions.
+- Output JSON only. No prose, no markdown.
