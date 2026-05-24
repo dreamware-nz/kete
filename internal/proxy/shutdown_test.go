@@ -15,7 +15,6 @@ import (
 func TestShutdown_Graceful(t *testing.T) {
 	// Build a server with one slow handler so we can exercise shutdown
 	// while a request is mid-flight.
-	cfg := Config{Host: "127.0.0.1", MaxBodyBytes: defaultMaxBodyBytes, RequestTimeout: defaultRequestTimeout}
 	mux := http.NewServeMux()
 	started := make(chan struct{})
 	mux.HandleFunc("/slow", func(w http.ResponseWriter, r *http.Request) {
@@ -30,7 +29,6 @@ func TestShutdown_Graceful(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	cfg.Port = ln.Addr().(*net.TCPAddr).Port
 	hsrv := &http.Server{Handler: mux}
 
 	go hsrv.Serve(ln)
@@ -40,9 +38,7 @@ func TestShutdown_Graceful(t *testing.T) {
 
 	// Fire a slow request and wait until it lands inside the handler.
 	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		req, _ := http.NewRequest("GET", url+"/slow", nil)
 		client := &http.Client{Timeout: 2 * time.Second}
 		resp, _ := client.Do(req)
@@ -50,7 +46,7 @@ func TestShutdown_Graceful(t *testing.T) {
 			io.Copy(io.Discard, resp.Body)
 			resp.Body.Close()
 		}
-	}()
+	})
 	<-started
 
 	// Shut down with the proxy's deadline.

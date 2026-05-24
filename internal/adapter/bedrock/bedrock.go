@@ -1,43 +1,40 @@
 // Package bedrock is the AWS Bedrock upstream adapter.
 //
 // Differs from anthropic-direct on three axes (ADR 0014):
-//  1. SigV4 per request via aws-sdk-go-v2.
-//  2. Body re-shape: drop "model", set "anthropic_version" body
-//     field, point URL at /model/{id}/invoke[-with-response-stream].
-//  3. Event-stream → SSE demux on the response.
+//   1. Auth: SigV4. We delegate to the bedrockruntime SDK client
+//      rather than hand-rolling SigV4+HTTP — the SDK has middleware
+//      that the raw signer/v4 path bypasses (content-type defaulting,
+//      chunked-payload signing nuances, etc.). Live-caught: the raw
+//      path made Bedrock 400 on bodies the SDK accepts byte-identically.
+//   2. Body re-shape: drop "model" and "stream" (model goes in the
+//      InvokeModelInput; the stream choice picks Invoke vs
+//      InvokeModelWithResponseStream), set "anthropic_version".
+//   3. Response framing: the SDK's stream output is Anthropic event
+//      JSON wrapped in {"bytes":"..."}; we re-emit as Anthropic-shaped
+//      SSE so clients dispatch on the inner type.
 package bedrock
 
 import (
-	"bytes"
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
-	"strings"
-	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/bedrockruntime"
+	"github.com/aws/aws-sdk-go-v2/service/bedrockruntime/types"
+	smithy "github.com/aws/smithy-go"
 )
 
-const (
-	bedrockHostFmt = "bedrock-runtime.%s.amazonaws.com"
-	bedrockBodyVer = "bedrock-2023-05-31"
-	signingService = "bedrock"
-)
+const bedrockBodyVer = "bedrock-2023-05-31"
 
 // Adapter implements adapter.Wire against AWS Bedrock.
 type Adapter struct {
-	Region     string
-	Creds      aws.CredentialsProvider
-	Signer     *v4.Signer
-	HTTPClient *http.Client
+	Region string
+	Client *bedrockruntime.Client
 }
 
 // New resolves credentials via the standard AWS chain. Returns an
@@ -53,73 +50,91 @@ func New(ctx context.Context) (*Adapter, error) {
 		return nil, fmt.Errorf("bedrock: load aws config: %w", err)
 	}
 	return &Adapter{
-		Region:     region,
-		Creds:      cfg.Credentials,
-		Signer:     v4.NewSigner(),
-		HTTPClient: &http.Client{Timeout: 5 * time.Minute},
+		Region: region,
+		Client: bedrockruntime.NewFromConfig(cfg),
 	}, nil
 }
 
 // Name reports the upstream id.
 func (a *Adapter) Name() string { return "bedrock" }
 
-// Forward translates the Anthropic-shaped body into a Bedrock request,
-// signs with SigV4, sends, and demuxes the event-stream response into
-// SSE for the client.
-func (a *Adapter) Forward(ctx context.Context, rawBody []byte, headers http.Header, w http.ResponseWriter) error {
+// Forward translates the Anthropic-shaped body into a Bedrock
+// invocation. The SDK does the SigV4, content-type, and request
+// shaping for us — kete just translates the body shape (ADR 0014's
+// deliberate exception to ADR 0006).
+func (a *Adapter) Forward(ctx context.Context, rawBody []byte, _ http.Header, w http.ResponseWriter) error {
 	stream, modelID, body, err := translateRequest(rawBody)
 	if err != nil {
 		return err
 	}
-	url := buildURL(a.Region, modelID, stream)
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
-	if err != nil {
-		return fmt.Errorf("bedrock: build req: %w", err)
-	}
-	req.ContentLength = int64(len(body))
-	req.Header.Set("content-type", "application/json")
 	if stream {
-		req.Header.Set("accept", "application/vnd.amazon.eventstream")
+		return a.forwardStream(ctx, modelID, body, w)
 	}
+	return a.forwardUnary(ctx, modelID, body, w)
+}
 
-	creds, err := a.Creds.Retrieve(ctx)
+func (a *Adapter) forwardUnary(ctx context.Context, modelID string, body []byte, w http.ResponseWriter) error {
+	out, err := a.Client.InvokeModel(ctx, &bedrockruntime.InvokeModelInput{
+		ModelId:     aws.String(modelID),
+		ContentType: aws.String("application/json"),
+		Accept:      aws.String("application/json"),
+		Body:        body,
+	})
 	if err != nil {
-		return fmt.Errorf("bedrock: creds: %w", err)
+		return writeBedrockError(w, err)
 	}
-	bodyHash := sha256.Sum256(body)
-	if err := a.Signer.SignHTTP(ctx, creds, req,
-		hex.EncodeToString(bodyHash[:]), signingService, a.Region, time.Now()); err != nil {
-		return fmt.Errorf("bedrock: sign: %w", err)
-	}
+	w.Header().Set("content-type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_, werr := w.Write(out.Body)
+	return werr
+}
 
-	resp, err := a.HTTPClient.Do(req)
+func (a *Adapter) forwardStream(ctx context.Context, modelID string, body []byte, w http.ResponseWriter) error {
+	out, err := a.Client.InvokeModelWithResponseStream(ctx, &bedrockruntime.InvokeModelWithResponseStreamInput{
+		ModelId:     aws.String(modelID),
+		ContentType: aws.String("application/json"),
+		Accept:      aws.String("application/json"),
+		Body:        body,
+	})
 	if err != nil {
-		return fmt.Errorf("bedrock: send: %w", err)
+		return writeBedrockError(w, err)
 	}
-	defer resp.Body.Close()
+	defer out.GetStream().Close()
 
-	if resp.StatusCode >= 400 {
-		body, _ := io.ReadAll(resp.Body)
-		w.Header().Set("content-type", "application/json")
-		w.WriteHeader(resp.StatusCode)
-		_, _ = w.Write(translateError(resp.StatusCode, body))
-		return nil
-	}
-
-	if !stream {
-		// Non-streaming: pass the JSON body through.
-		w.Header().Set("content-type", "application/json")
-		w.WriteHeader(resp.StatusCode)
-		_, err := io.Copy(w, resp.Body)
-		return err
-	}
-
-	// Streaming: demux event-stream → SSE.
 	w.Header().Set("content-type", "text/event-stream")
-	w.WriteHeader(resp.StatusCode)
+	w.WriteHeader(http.StatusOK)
 	flusher, _ := w.(http.Flusher)
-	return demuxEventStream(resp.Body, w, flusher)
+
+	for ev := range out.GetStream().Events() {
+		chunk, ok := ev.(*types.ResponseStreamMemberChunk)
+		if !ok {
+			continue
+		}
+		// chunk.Value.Bytes is the Anthropic event JSON. Pull the
+		// inner `type` to use as the SSE event name (so clients
+		// dispatch identically to Anthropic-direct).
+		eventType := anthropicEventType(chunk.Value.Bytes)
+		if eventType == "" {
+			eventType = "message"
+		}
+		if _, werr := fmt.Fprintf(w, "event: %s\ndata: %s\n\n", eventType, chunk.Value.Bytes); werr != nil {
+			return werr
+		}
+		if flusher != nil {
+			flusher.Flush()
+		}
+	}
+	if streamErr := out.GetStream().Err(); streamErr != nil {
+		// Stream errors land mid-flight after headers are flushed;
+		// surface as a synthetic SSE error event so the client sees
+		// something instead of a silent close.
+		fmt.Fprintf(w, "event: error\ndata: %s\n\n", translateError(0, []byte(streamErr.Error())))
+		if flusher != nil {
+			flusher.Flush()
+		}
+	}
+	return nil
 }
 
 // translateRequest reads the Anthropic-shaped JSON, returns the model
@@ -147,14 +162,34 @@ func translateRequest(rawBody []byte) (stream bool, modelID string, body []byte,
 	return stream, modelID, body, err
 }
 
-// buildURL points at the regional Bedrock endpoint with the right
-// invoke path for stream vs non-stream.
-func buildURL(region, modelID string, stream bool) string {
-	host := fmt.Sprintf(bedrockHostFmt, region)
-	path := "invoke"
-	if stream {
-		path = "invoke-with-response-stream"
+// writeBedrockError renders an SDK error as an Anthropic-shaped error
+// JSON response and returns nil (the request succeeded, the upstream
+// said no). Status comes from the smithy APIError when available.
+func writeBedrockError(w http.ResponseWriter, sdkErr error) error {
+	status := http.StatusBadGateway
+	body := []byte(sdkErr.Error())
+
+	var apiErr smithy.APIError
+	if errors.As(sdkErr, &apiErr) {
+		switch apiErr.ErrorFault() {
+		case smithy.FaultClient:
+			status = http.StatusBadRequest
+		case smithy.FaultServer:
+			status = http.StatusBadGateway
+		}
+		// Best-effort: pull any nested response body.
+		if rerr, ok := sdkErr.(interface{ HTTPStatusCode() int }); ok {
+			status = rerr.HTTPStatusCode()
+		}
+		// API error has Code() + Message().
+		body, _ = json.Marshal(map[string]any{
+			"__type":  apiErr.ErrorCode(),
+			"message": apiErr.ErrorMessage(),
+		})
 	}
-	return fmt.Sprintf("https://%s/model/%s/%s",
-		host, strings.ReplaceAll(modelID, "/", "%2F"), path)
+	w.Header().Set("content-type", "application/json")
+	w.WriteHeader(status)
+	_, _ = w.Write(translateError(status, body))
+	return nil
 }
+

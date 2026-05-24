@@ -133,7 +133,7 @@ func indexAtTopLevel(b, needle []byte) int {
 	depth := 0
 	inString := false
 	escape := false
-	for i := 0; i < len(b); i++ {
+	for i := range len(b) {
 		c := b[i]
 		switch {
 		case escape:
@@ -182,7 +182,7 @@ func findCacheControlStart(b []byte) (int, error) {
 	needle := []byte(`"cache_control"`)
 	inString := false
 	escape := false
-	for i := 0; i < len(b); i++ {
+	for i := range len(b) {
 		c := b[i]
 		switch {
 		case escape:

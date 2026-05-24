@@ -110,7 +110,7 @@ func (u *usageTap) consumeFramesLocked() {
 func (u *usageTap) processFrameLocked(frame []byte) {
 	var event string
 	var data []byte
-	for _, line := range bytes.Split(frame, []byte("\n")) {
+	for line := range bytes.SplitSeq(frame, []byte("\n")) {
 		switch {
 		case bytes.HasPrefix(line, []byte("event: ")):
 			event = string(line[len("event: "):])

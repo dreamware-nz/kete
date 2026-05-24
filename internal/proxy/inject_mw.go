@@ -13,9 +13,18 @@ import (
 // injectMemory splices up to 3 prior tasks for project into rawBody.
 // Ranking is "newest first" — real ranking lands in plan 010.
 //
-// If the body has a cache_control marker, we splice before it (so the
-// cache prefix stays intact); otherwise we append to the messages
-// array. If there are no prior tasks, the body is returned unchanged.
+// Splices at the end of the messages array via inject.AtMessages.
+//
+// We previously tried inject.BeforeCacheBreakpoint to land before
+// the first cache_control marker (preserving the Anthropic
+// prompt-cache prefix), but the walkBackToObjectStart heuristic in
+// internal/inject misidentifies the containing message when
+// cache_control sits deep inside a content block — it splices INTO a
+// content array instead of BETWEEN messages, producing JSON that
+// Bedrock reasonably rejects with
+// "messages.N.content.M.type: Field required". Live-caught against
+// Crush + Bedrock. Until inject.BeforeCacheBreakpoint can be made
+// message-aware, AtMessages is the only correct path.
 func injectMemory(ctx context.Context, db *store.DB, project string, rawBody []byte) ([]byte, error) {
 	if db == nil || project == "" {
 		return rawBody, nil
@@ -33,9 +42,6 @@ func injectMemory(ctx context.Context, db *store.DB, project string, rawBody []b
 	payload, err := buildMemoryPayload(tasks)
 	if err != nil {
 		return rawBody, err
-	}
-	if out, err := inject.BeforeCacheBreakpoint(rawBody, payload); err == nil {
-		return out, nil
 	}
 	return inject.AtMessages(rawBody, payload)
 }
@@ -65,9 +71,9 @@ func buildMemoryPayload(tasks []*store.Task) ([]byte, error) {
 }
 
 // injectCorrectionPayload splices a kete-flavoured correction message
-// into the request body. Same scheme as memory injection: prefer the
-// cache-breakpoint splice; fall back to messages-array tail. Same
-// Bedrock-friendly typed-block content shape.
+// at the end of the messages array. Same Bedrock-friendly typed-block
+// content shape. Note: also avoids inject.BeforeCacheBreakpoint for
+// the same body-corruption reason as injectMemory.
 func injectCorrectionPayload(rawBody []byte, correction string) ([]byte, error) {
 	msg := map[string]any{
 		"role": "user",
@@ -81,9 +87,6 @@ func injectCorrectionPayload(rawBody []byte, correction string) ([]byte, error) 
 	payload, err := json.Marshal(msg)
 	if err != nil {
 		return rawBody, err
-	}
-	if out, err := inject.BeforeCacheBreakpoint(rawBody, payload); err == nil {
-		return out, nil
 	}
 	return inject.AtMessages(rawBody, payload)
 }

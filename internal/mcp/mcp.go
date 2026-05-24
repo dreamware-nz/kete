@@ -51,7 +51,6 @@ const (
 	errInvalidRequest = -32600
 	errMethodNotFound = -32601
 	errInvalidParams  = -32602
-	errInternal       = -32603
 )
 
 // Server holds the dispatch state. One per process; safe for concurrent
@@ -158,12 +157,6 @@ func (s *Server) write(out io.Writer, resp rpcResponse) {
 }
 
 // initialize handshake.
-
-type initializeParams struct {
-	ProtocolVersion string         `json:"protocolVersion"`
-	Capabilities    map[string]any `json:"capabilities"`
-	ClientInfo      map[string]any `json:"clientInfo"`
-}
 
 type initializeResult struct {
 	ProtocolVersion string         `json:"protocolVersion"`
