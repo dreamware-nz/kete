@@ -1,11 +1,14 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"text/tabwriter"
+	"time"
 
 	"github.com/dreamware-nz/kete/internal/store"
 	"github.com/spf13/cobra"
@@ -32,6 +35,7 @@ func newDoctorCmd() *cobra.Command {
 func runDoctor(w io.Writer) error {
 	checks := []check{
 		checkDotdir(),
+		checkUpstream(),
 	}
 	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
 	defer tw.Flush()
@@ -69,4 +73,54 @@ func checkDotdir() check {
 			fmt.Sprintf("%s mode %o, want 700", dir, info.Mode().Perm())}
 	}
 	return check{"dotdir", "PASS", dir}
+}
+
+// upstreamURL returns the URL the proxy will dial, derived from
+// KETE_UPSTREAM (anthropic|cc-proxy|bedrock; default anthropic) and the
+// matching *_URL override env var. ADR 0015.
+func upstreamURL() (string, error) {
+	switch up := os.Getenv("KETE_UPSTREAM"); up {
+	case "", "anthropic":
+		if u := os.Getenv("KETE_ANTHROPIC_URL"); u != "" {
+			return u, nil
+		}
+		return "https://api.anthropic.com", nil
+	case "cc-proxy":
+		if u := os.Getenv("KETE_CC_PROXY_URL"); u != "" {
+			return u, nil
+		}
+		return "", errors.New("KETE_UPSTREAM=cc-proxy requires KETE_CC_PROXY_URL")
+	case "bedrock":
+		region := os.Getenv("AWS_REGION")
+		if region == "" {
+			return "", errors.New("KETE_UPSTREAM=bedrock requires AWS_REGION")
+		}
+		return "https://bedrock-runtime." + region + ".amazonaws.com", nil
+	default:
+		return "", fmt.Errorf("KETE_UPSTREAM=%q (want anthropic|cc-proxy|bedrock)", up)
+	}
+}
+
+// checkUpstream HEAD-pings the configured upstream URL.
+// Any 2xx, 4xx (auth-shaped), or 405 counts as reachable; only network
+// errors and 5xx count as FAIL.
+func checkUpstream() check {
+	url, err := upstreamURL()
+	if err != nil {
+		return check{"upstream", "FAIL", err.Error()}
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	req, _ := http.NewRequestWithContext(ctx, http.MethodHead, url, nil)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return check{"upstream", "FAIL", url + " — " + err.Error()}
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 500 {
+		return check{"upstream", "FAIL",
+			fmt.Sprintf("%s — HTTP %d", url, resp.StatusCode)}
+	}
+	return check{"upstream", "PASS",
+		fmt.Sprintf("%s — HTTP %d", url, resp.StatusCode)}
 }
