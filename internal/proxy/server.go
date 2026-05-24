@@ -21,6 +21,7 @@ import (
 	"github.com/dreamware-nz/kete/internal/adapter/anthropic"
 	"github.com/dreamware-nz/kete/internal/adapter/bedrock"
 	"github.com/dreamware-nz/kete/internal/adapter/ccproxy"
+	"github.com/dreamware-nz/kete/internal/compact"
 	"github.com/dreamware-nz/kete/internal/drift"
 	"github.com/dreamware-nz/kete/internal/extract"
 	"github.com/dreamware-nz/kete/internal/keepalive"
@@ -78,6 +79,7 @@ type Server struct {
 	driftSt   *drift.State
 	extractor *extract.Client // shared with capture; used for drift scoring
 	keepalive *keepalive.Manager
+	compactor *compactSessions
 
 	mu          sync.Mutex
 	corrections map[string]string // project -> pending correction text
@@ -96,6 +98,7 @@ func NewServer(cfg Config, db *store.DB) *Server {
 		capture:     newCapture(db),
 		driftHook:   newDriftHook(),
 		driftSt:     drift.NewState(),
+		compactor:   newCompactSessions(),
 		corrections: make(map[string]string),
 	}
 	// Capture builds its own extractor; reuse it for drift scoring so
@@ -233,6 +236,19 @@ func (s *Server) handleMessages(w http.ResponseWriter, r *http.Request) {
 
 	project := projectPath()
 
+	// If a prior turn crossed the clear threshold, rewrite the body
+	// to drop the conversation in favour of the structured summary.
+	// This is the deliberate ADR 0006 exception: compaction *is* a
+	// re-marshal, by design.
+	if s.compactor.drainPending(project) {
+		if summary, ok := s.compactor.cache.Get(project); ok && summary != nil {
+			next := compact.LastUserPrompt(rawBody)
+			if rewritten, err := compact.Apply(rawBody, summary, next); err == nil {
+				rawBody = rewritten
+			}
+		}
+	}
+
 	// Inject prior memory before forwarding. Failure is non-fatal:
 	// brief 002 says enrichment never blocks forwarding.
 	injected, err := injectMemory(r.Context(), s.store, project, rawBody)
@@ -249,8 +265,15 @@ func (s *Server) handleMessages(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Wrap w with a usage tap so we observe Anthropic-shaped token
+	// counts as the response streams back. cb is nil when there's no
+	// extractor (no compaction can happen without one), making the
+	// tap a transparent passthrough.
+	tap := newUsageTap(w, s.usageCallback(project, rawBody))
+	defer tap.Done()
+
 	sanitised := SanitiseHeaders(r.Header)
-	if err := ad.Forward(r.Context(), injected, sanitised, w); err != nil {
+	if err := ad.Forward(r.Context(), injected, sanitised, tap); err != nil {
 		fmt.Fprintf(os.Stderr, "forward(%s): %v\n", up, err)
 	}
 
@@ -268,6 +291,18 @@ func (s *Server) handleMessages(w http.ResponseWriter, r *http.Request) {
 	// session id (one session per project for v1).
 	if s.keepalive != nil && up == UpstreamAnthropic {
 		s.keepalive.Stash(project, rawBody, sanitised, anthropicURLFromAdapter(ad))
+	}
+}
+
+// usageCallback builds the per-request closure passed to the usage
+// tap. nil when there's no extractor (compaction can't run).
+func (s *Server) usageCallback(project string, conversation []byte) func(int, int) {
+	if s.extractor == nil {
+		return nil
+	}
+	convo := string(conversation)
+	return func(in, out int) {
+		s.compactor.observe(s.extractor, project, convo, in+out)
 	}
 }
 
