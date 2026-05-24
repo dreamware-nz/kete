@@ -1,7 +1,7 @@
 ---
 id: 009-extended-cache
 date: 2026-05-24
-status: draft
+status: active
 brief: 009-extended-cache
 design: null
 adrs: [0013-byte-exact-keepalive-injection]
