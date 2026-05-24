@@ -31,6 +31,7 @@ func newRootCmd() *cobra.Command {
 	root.AddCommand(newTasksCmd())
 	root.AddCommand(newDriftTestCmd())
 	root.AddCommand(newDoctorCmd())
+	root.AddCommand(newPurgeCmd())
 	return root
 }
 
