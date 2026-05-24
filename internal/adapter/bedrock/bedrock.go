@@ -1,17 +1,17 @@
 // Package bedrock is the AWS Bedrock upstream adapter.
 //
 // Differs from anthropic-direct on three axes (ADR 0014):
-//   1. Auth: SigV4. We delegate to the bedrockruntime SDK client
-//      rather than hand-rolling SigV4+HTTP — the SDK has middleware
-//      that the raw signer/v4 path bypasses (content-type defaulting,
-//      chunked-payload signing nuances, etc.). Live-caught: the raw
-//      path made Bedrock 400 on bodies the SDK accepts byte-identically.
-//   2. Body re-shape: drop "model" and "stream" (model goes in the
-//      InvokeModelInput; the stream choice picks Invoke vs
-//      InvokeModelWithResponseStream), set "anthropic_version".
-//   3. Response framing: the SDK's stream output is Anthropic event
-//      JSON wrapped in {"bytes":"..."}; we re-emit as Anthropic-shaped
-//      SSE so clients dispatch on the inner type.
+//  1. Auth: SigV4. We delegate to the bedrockruntime SDK client
+//     rather than hand-rolling SigV4+HTTP — the SDK has middleware
+//     that the raw signer/v4 path bypasses (content-type defaulting,
+//     chunked-payload signing nuances, etc.). Live-caught: the raw
+//     path made Bedrock 400 on bodies the SDK accepts byte-identically.
+//  2. Body re-shape: drop "model" and "stream" (model goes in the
+//     InvokeModelInput; the stream choice picks Invoke vs
+//     InvokeModelWithResponseStream), set "anthropic_version".
+//  3. Response framing: the SDK's stream output is Anthropic event
+//     JSON wrapped in {"bytes":"..."}; we re-emit as Anthropic-shaped
+//     SSE so clients dispatch on the inner type.
 package bedrock
 
 import (
@@ -192,4 +192,3 @@ func writeBedrockError(w http.ResponseWriter, sdkErr error) error {
 	_, _ = w.Write(translateError(status, body))
 	return nil
 }
-
