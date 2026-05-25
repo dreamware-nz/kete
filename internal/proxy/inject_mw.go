@@ -36,6 +36,22 @@ func injectMemory(ctx context.Context, db *store.DB, project string, rawBody []b
 	if len(tasks) == 0 {
 		return rawBody, nil
 	}
+	// Drop tasks the extractor hasn't enriched. Bare-shell memories
+	// — `<kete:memory id=... created=...></kete:memory>` — are noise
+	// the agent rightly ignores; they also feed back into Haiku's
+	// next call (the agent talks about "empty memory tags" in its
+	// reply, which becomes the next captured trace, which Haiku then
+	// mirrors). Skip them at the source.
+	enriched := tasks[:0]
+	for _, t := range tasks {
+		if t.Goal != "" || len(t.Decisions) > 0 || len(t.FilesTouched) > 0 {
+			enriched = append(enriched, t)
+		}
+	}
+	tasks = enriched
+	if len(tasks) == 0 {
+		return rawBody, nil
+	}
 	if len(tasks) > 3 {
 		tasks = tasks[:3]
 	}

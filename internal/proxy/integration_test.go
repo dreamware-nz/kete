@@ -71,8 +71,10 @@ func TestProxy_CaptureInjectAndEnrich(t *testing.T) {
 	extractUpstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		extractHits++
 		// Anthropic-shaped response with a single text block whose
-		// content is the JSON ExtractTask expects.
-		fmt.Fprint(w, `{"id":"x","type":"message","role":"assistant","content":[{"type":"text","text":"{\"goal\":\"answer hello\",\"decisions\":[{\"choice\":\"reply with ok\",\"rationale\":\"shortest valid response\"}],\"files_touched\":[\"none\"]}"}],"stop_reason":"end_turn","usage":{"input_tokens":1,"output_tokens":1}}`)
+		// content is the JSON continuation ExtractTask expects (the
+		// extractor prefills with "{" and re-prepends it before
+		// parsing).
+		fmt.Fprint(w, `{"id":"x","type":"message","role":"assistant","content":[{"type":"text","text":"\"goal\":\"answer hello\",\"decisions\":[{\"choice\":\"reply with ok\",\"rationale\":\"shortest valid response\"}],\"files_touched\":[\"none\"]}"}],"stop_reason":"end_turn","usage":{"input_tokens":1,"output_tokens":1}}`)
 	}))
 	defer extractUpstream.Close()
 

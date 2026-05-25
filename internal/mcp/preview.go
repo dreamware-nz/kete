@@ -44,6 +44,16 @@ func (s *Server) callPreview(ctx context.Context, raw json.RawMessage) (any, *rp
 	if err != nil {
 		return errToRPC(err)
 	}
+	// Drop unenriched rows — they have no goal, no decisions, no
+	// files, so the previewer would just see id+timestamp. Empty
+	// previews waste tokens and confuse agents.
+	enriched := tasks[:0]
+	for _, t := range tasks {
+		if t.Goal != "" || len(t.Decisions) > 0 || len(t.FilesTouched) > 0 {
+			enriched = append(enriched, t)
+		}
+	}
+	tasks = enriched
 	if len(tasks) > previewLimit {
 		tasks = tasks[:previewLimit]
 	}

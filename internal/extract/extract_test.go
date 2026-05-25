@@ -113,7 +113,7 @@ func TestSendWithRetry_400_FailsFast(t *testing.T) {
 }
 
 func TestExtractTask_ParsesJSON(t *testing.T) {
-	body := `{"goal":"refactor auth","decisions":[{"choice":"jwt","rationale":"stateless"}],"files_touched":["a.go"]}`
+	body := `"goal":"refactor auth","decisions":[{"choice":"jwt","rationale":"stateless"}],"files_touched":["a.go"]}`
 	srv := stub(t, 200, body, nil)
 	defer srv.Close()
 	c := newClientFor(t, srv)
@@ -148,7 +148,7 @@ func TestExtractDecisions_ParsesJSON(t *testing.T) {
 
 func TestMaxTokens_RespectedPerCallSite(t *testing.T) {
 	var captured atomic.Pointer[Request]
-	srv := stub(t, 200, `{"goal":"","decisions":[],"files_touched":[]}`, &captured)
+	srv := stub(t, 200, `"goal":"","decisions":[],"files_touched":[]}`, &captured)
 	defer srv.Close()
 	c := newClientFor(t, srv)
 	if _, err := c.ExtractTask(context.Background(), "x"); err != nil {
